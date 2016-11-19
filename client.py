@@ -21,14 +21,15 @@ except socket.error:
     sys.exit()
 
 #Setting up the LISTENING udp portion
-sock.bind((SERVER_IP,UDP_PORT))
+sock.bind((socket.gethostbyname(socket.gethostname()),UDP_PORT))
 #sock2.bind((SERVER_IP,UDP_ACK_PORT))
 
-def user_listen(data, address):
+def user_listen():
     global SERVER_IP
     global SERVER_PORT
     msg = { 'seq' : seq_num, 'type' : 'get' , 'source' : socket.gethostbyname(socket.gethostname()), 'payload' : ''}
     sock.sendto(pickle.dumps(msg).encode('utf-8'),(SERVER_IP,SERVER_PORT))
+    data, address = sock.recvfrom(1024)
     while data:
         message = pickle.loads(data.decode('utf-8'))
         print "Received Message: ", message['payload'] #this may change... JOSH
@@ -56,7 +57,7 @@ t = threading.Thread(target = send_mode(), args=[])
 t.start()
 
 while True:
-    data, address = sock.recvfrom(1024)
-    t2 = threading.Thread(target =user_listen(), args=[data, address])
+    
+    t2 = threading.Thread(target =user_listen(), args=[])
     t2.start()
     

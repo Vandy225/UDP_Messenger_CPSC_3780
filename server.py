@@ -16,6 +16,7 @@ except socket.error:
     print 'Failed to create sockets.'
     sys.exit()
 
+#server will listen to any IP using it's ports.
 sock.bind(('', UDP_PORT))
 sock2.bind(('', UDP_ACK_PORT))
 
@@ -31,21 +32,27 @@ client_list = {}
 def deliver_messages(dest, msg, address):
     if dest not in message_list:
         print 'No messages for you...'
+        #send a no message response. Inbox is empty
         hot_mess = { 'seq' : '', 'type' : '' , 'source' : SERVER_ADDRESS, 'destination' : dest, 'payload' : 'No messages.' }
         sock.sendto(pickle.dumps(hot_mess).encode('utf-8'), (address[0], address[1]))
     else:
-        for client_ip in message_list:
-            print 'nerds 4 a bttr worl...'
-            if(dest == client_ip):
-                print 'nested usa...'
-                for message in client_ip:
-                    print 'nestesd hell...'
-                    sock.sendto(pickle.dumps(message).encode('utf-8'),(address[0],address[1]))
+#We are going to either want to fix client to listen properly, or make the server send all client dicts in a array or something.
+        client_msgs = message_list[dest]
+        print "client msgs to deliver" + str(client_msgs)
+        for msg in client_msgs:
+            sock.sendto(pickle.dumps(msg).encode('utf-8'),(address[0],address[1]))
+
 
 #store the message for destination in the list. 
 def store_message(dest, msg):
     if dest in message_list:
-        message_list[dest] = msg
+        print "dest already in list, adding msg to it"
+        message_list[dest].append(msg)
+    else: 
+        print "dest not in list, creating new list"
+        newList = []
+        newList.append(msg)
+        message_list[dest] = newList
 
 def receive_message(data, address):
     print 'Attempting to decode the death star plans...'
