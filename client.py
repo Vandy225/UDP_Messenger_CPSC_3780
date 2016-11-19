@@ -12,7 +12,7 @@ UDP_ACK_PORT = 5009
 SERVER_PORT = 5005
 SERVER_ACK_PORT = 5006
 seq_num = 0
-message = { 'seq' : seq_num, 'type' : '' , 'source' : socket.gethostbyname(socket.gethostname()), 'destination' : '142.66.140.24', 'payload' : ''}
+message = { 'seq' : seq_num, 'type' : '' , 'source' : socket.gethostbyname(socket.gethostname()), 'destination' : '142.66.140.23', 'payload' : ''}
 try:
     sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     sock2 = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -21,19 +21,25 @@ except socket.error:
     sys.exit()
 
 #Setting up the LISTENING udp portion
-sock.bind((SERVER_IP,UDP_PORT))
+sock.bind((socket.gethostbyname(socket.gethostname()),UDP_PORT))
 #sock2.bind((SERVER_IP,UDP_ACK_PORT))
 
-def user_listen(data, address):
+def user_listen():
     global SERVER_IP
     global SERVER_PORT
     msg = { 'seq' : seq_num, 'type' : 'get' , 'source' : socket.gethostbyname(socket.gethostname()), 'payload' : ''}
+    print 'trying to send get'
     sock.sendto(pickle.dumps(msg).encode('utf-8'),(SERVER_IP,SERVER_PORT))
-    while data:
-        message = pickle.loads(data.decode('utf-8'))
-        print "Received Message: ", message['payload'] #this may change... JOSH
-        if(message['payload'] == 'No messages'):
-            break
+    print 'waiting for server response'
+    data, address = sock.recvfrom(1024)
+    msg = pickle.loads(data.decode('utf-8'))
+    print "Received Message: " + str(msg) #this may change... JOSH
+    #we need to be able to get the message dump, right now we are only
+    #getting one messgage at a time
+    #may use a loop to iterate through the messages --> need to implements ACKS
+    #or use the seq number to stop iterating through the for loop
+    if(msg['payload'] == 'No messages'):
+        pass
         
 
 def send_mode():
@@ -49,14 +55,17 @@ def send_mode():
             sock.sendto(pickle.dumps(message).encode('utf-8'),(SERVER_IP,SERVER_PORT))
             global seq_num 
             seq_num += 1
-        
-    
+            user_listen()
 
+#while True:
+print 'starting thread 2'
+t2 = threading.Thread(target =user_listen(), args=[])
+t2.start()     
+    
+print 'starting thread 1'
 t = threading.Thread(target = send_mode(), args=[])
 t.start()
+print 'thread 1 has started'
 
-while True:
-    data, address = sock.recvfrom(1024)
-    t2 = threading.Thread(target =user_listen(), args=[data, address])
-    t2.start()
+
     
