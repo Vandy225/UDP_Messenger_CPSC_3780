@@ -1,6 +1,7 @@
 import socket
 import pickle
 import threading
+from multiprocessing import Process, Queue
 import time
 import sys
 
@@ -27,46 +28,59 @@ sock.bind((socket.gethostbyname(socket.gethostname()),UDP_PORT))
 def user_listen():
     global SERVER_IP
     global SERVER_PORT
-    msg = { 'seq' : seq_num, 'type' : 'get' , 'source' : socket.gethostbyname(socket.gethostname()), 'payload' : ''}
+    msg = { 'seq' : '', 'type' : 'get' , 'source' : socket.gethostbyname(socket.gethostname()), 'payload' : ''}
     print ("trying to send get")
     sock.sendto(pickle.dumps(msg),(SERVER_IP,SERVER_PORT))
     print ("waiting for server response")
     data, address = sock.recvfrom(1024)
-    msg = pickle.loads(data)
-    print ("Received Message: " + str(msg)) #this may change... JOSH
+    message_list = pickle.loads(data) #now the client is getting the entire message list, need to iterate through
+    ack_list = []
+    if message_list.empty() is False:
+        for index in message_list:
+            if (index['payload'] != 'No messages.'):
+                print ("Received Message: " + str(index['payload']))#this may change... JOSH
+            ack_list.append(index['seq_num'])
+        ack_handle(ack_list)
+    else:
+        print("No Messages right now. Check back later.")
     #we need to be able to get the message dump, right now we are only
     #getting one messgage at a time
     #may use a loop to iterate through the messages --> need to implements ACKS
     #or use the seq number to stop iterating through the for loop
-    if(msg['payload'] == 'No messages'):
-        pass
+
         
 
 def send_mode():
     while True:
         thing = input("Message: ")
         if(thing == ''):
-            pass
+            user_listen()
         else:
             global SERVER_IP 
             global SERVER_PORT
             global seq_num
             message['seq'] = seq_num
-            print ("sending message with seq_num =" + message['seq'])
+            print ("sending message with seq_num =" + str(message['seq']))
             message['payload'] = thing
             message['type'] = 'send'
             sock.sendto(pickle.dumps(message),(SERVER_IP,SERVER_PORT))
             seq_num += 1
-            user_listen()
+
+
+def ack_handle(listy):
+    ack = {'seq': '', 'type': 'ack', 'source': socket.gethostbyname(socket.gethostname()), 'destination': '',
+     'payload': listy}
+    sock2.sento(pickle.dumps(ack),(SERVER_IP,SERVER_ACK_PORT))
+
 
 #while True:
-print ("starting thread 2")
-t2 = threading.Thread(target =user_listen(), args=[])
-t2.start()     
+print ("starting process 1")
+p1 = Process(target = user_listen(), args=[])
+p1.start()
     
 print ("starting thread 1")
-t = threading.Thread(target = send_mode(), args=[])
-t.start()
+p2 = Process(target = send_mode(), args=[])
+p1.start()
 print ("thread 1 has started")
 
 
