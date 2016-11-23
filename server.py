@@ -21,21 +21,24 @@ def receive_message(message_queue):
     # if the message is of type 'send', output flag, call store_message
     if (message['type'] == 'send'):
         print("Message recieved, storing...")
-        ps = Process(target = store_message, args=(message['destination'], message, message_queue,))
+        '''ps = Process(target = store_message, args=(message['destination'], message, message_queue,))
         ps.start()
         ps.join()
-        ps.terminate()
+        ps.terminate()'''
+        store_message(message['destination'], message, message_queue)
     if (message['type'] == 'get'):
         print("Deliver messages...")
-        pdm = Process(target =deliver_messages, args=(message['source'], message, address, message_queue,))
+        '''pdm = Process(target =deliver_messages, args=(message['source'], message, address, message_queue,))
         pdm.start()
         pdm.join()
-        pdm.terminate()
+        pdm.terminate()'''
+        deliver_messages(message['source'], message, address, message_queue)
     if (message['type'] == 'ack'):
-        pha = Process(target=handle_acknowledgement,args=(message['payload'], message['source'], message_queue,))
+        '''pha = Process(target=handle_acknowledgement,args=(message['payload'], message['source'], message_queue,))
         pha.start()
         pha.join()
-        pha.terminate()
+        pha.terminate()'''
+        handle_acknowledgement(message['payload'], message['source'], message_queue)
 
     # iterate over the list of stored messages for a particular client.
     # Send each message individually.
@@ -50,7 +53,7 @@ def deliver_messages(dest, msg, address, message_queue):
         # We are going to either want to fix client to listen properly, or make the server send all client dicts in a array or something.
         client_msgs = message_dict[dest]
         print("client msgs to deliver" + str(client_msgs))
-        sock.sendto(pickle.dumps(client_msg), (address[0], address[1]))
+        sock.sendto(pickle.dumps(client_msgs), (address[0], address[1]))
     message_queue.put(message_dict)
         # wait for some amount of time in order to get all the acks from client for messages in sent list.
         # Waiting for ACKS needs to happen right here. An ACK function should be used. The message queue will not

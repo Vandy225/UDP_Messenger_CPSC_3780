@@ -13,19 +13,9 @@ UDP_ACK_PORT = 5009
 SERVER_PORT = 5005
 SERVER_ACK_PORT = 5006
 seq_num = 0
-message = { 'seq' : seq_num, 'type' : '' , 'source' : socket.gethostbyname(socket.gethostname()), 'destination' : '10.76.134.106', 'payload' : ''}
-try:
-    sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    sock2 = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-except socket.error:
-    print ("Failed to create sockets.")
-    sys.exit()
+message = { 'seq' : seq_num, 'type' : '' , 'source' : socket.gethostbyname(socket.gethostname()), 'destination' : '10.76.69.237', 'payload' : ''}
 
-#Setting up the LISTENING udp portion
-sock.bind((socket.gethostbyname(socket.gethostname()),UDP_PORT))
-#sock2.bind((SERVER_IP,UDP_ACK_PORT))
-
-def user_listen():
+def user_listen(sock,sock2):
     global SERVER_IP
     global SERVER_PORT
     msg = { 'seq' : '', 'type' : 'get' , 'source' : socket.gethostbyname(socket.gethostname()), 'payload' : ''}
@@ -35,12 +25,12 @@ def user_listen():
     data, address = sock.recvfrom(1024)
     message_list = pickle.loads(data) #now the client is getting the entire message list, need to iterate through
     ack_list = []
-    if message_list.empty() is False:
+    if not message_list:
         for index in message_list:
             if (index['payload'] != 'No messages.'):
                 print ("Received Message: " + str(index['payload']))#this may change... JOSH
             ack_list.append(index['seq_num'])
-        ack_handle(ack_list)
+        ack_handle(ack_list,sock2)
     else:
         print("No Messages right now. Check back later.")
     #we need to be able to get the message dump, right now we are only
@@ -50,9 +40,9 @@ def user_listen():
 
         
 
-def send_mode():
+def send_mode(sock):
     while True:
-        thing = input("Message: ")
+        thing = input('Message: ')
         if(thing == ''):
             user_listen()
         else:
@@ -67,21 +57,35 @@ def send_mode():
             seq_num += 1
 
 
-def ack_handle(listy):
+def ack_handle(listy,sock2):
     ack = {'seq': '', 'type': 'ack', 'source': socket.gethostbyname(socket.gethostname()), 'destination': '',
      'payload': listy}
-    sock2.sento(pickle.dumps(ack),(SERVER_IP,SERVER_ACK_PORT))
+    sock2.sendto(pickle.dumps(ack),(SERVER_IP,SERVER_ACK_PORT))
+
+def main():
+    try:
+        sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        sock2 = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    except socket.error:
+        print ("Failed to create sockets.")
+        sys.exit()
+
+    #Setting up the LISTENING udp portion
+    sock.bind((socket.gethostbyname(socket.gethostname()),UDP_PORT))
+    #sock2.bind((SERVER_IP,UDP_ACK_PORT))
+
+    #while True:
+    print ("starting process 1")
+    p1 = Process(target = user_listen, args=(sock,sock2,))
+    p1.start()
+
+    print ("starting thread 1")
+    p2 = Process(target = send_mode, args=(sock,))
+    p2.start()
+    print ("thread 1 has started")
 
 
-#while True:
-print ("starting process 1")
-p1 = Process(target = user_listen(), args=[])
-p1.start()
-    
-print ("starting thread 1")
-p2 = Process(target = send_mode(), args=[])
-p1.start()
-print ("thread 1 has started")
 
-
-    
+#run main program
+if(__name__ == "__main__"):
+    main()
