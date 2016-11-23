@@ -1,10 +1,10 @@
-import socket
 import pickle
-import threading
-from multiprocessing import Process, Queue
-import time
+import socket
 import sys
-
+import multiprocessing as mp
+from multiprocessing import Process
+import sys
+import os
 
 '''Servers IP address'''
 SERVER_IP = "10.76.134.106"
@@ -19,9 +19,9 @@ def user_listen(sock,sock2):
     global SERVER_IP
     global SERVER_PORT
     msg = { 'seq' : '', 'type' : 'get' , 'source' : socket.gethostbyname(socket.gethostname()), 'payload' : ''}
-    print ("trying to send get")
+    print ("Trying to send get...")
     sock.sendto(pickle.dumps(msg),(SERVER_IP,SERVER_PORT))
-    print ("waiting for server response")
+    print ("Waiting for server response...")
     data, address = sock.recvfrom(1024)
     message_list = pickle.loads(data) #now the client is getting the entire message list, need to iterate through
     ack_list = []
@@ -38,13 +38,14 @@ def user_listen(sock,sock2):
     #may use a loop to iterate through the messages --> need to implements ACKS
     #or use the seq number to stop iterating through the for loop
 
-        
-
-def send_mode(sock):
+def send_mode(sock, sock2,fileno):
+    #Open the same stdin as main.
+    sys.stdin = os.fdopen(fileno)
     while True:
-        thing = input('Message: ')
+        #something is wrong with one of the previous print statements.
+        thing = input("Message: ")
         if(thing == ''):
-            user_listen()
+            user_listen(sock, sock2)
         else:
             global SERVER_IP 
             global SERVER_PORT
@@ -63,6 +64,7 @@ def ack_handle(listy,sock2):
     sock2.sendto(pickle.dumps(ack),(SERVER_IP,SERVER_ACK_PORT))
 
 def main():
+    fn = sys.stdin.fileno()
     try:
         sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         sock2 = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -78,14 +80,16 @@ def main():
     print ("starting process 1")
     p1 = Process(target = user_listen, args=(sock,sock2,))
     p1.start()
+    print("Process 1 has started.")
 
-    print ("starting thread 1")
-    p2 = Process(target = send_mode, args=(sock,))
+    print ("starting process 2")
+    p2 = Process(target = send_mode, args=(sock,sock2,fn))
     p2.start()
-    print ("thread 1 has started")
+    print ("process 2 has started")
 
 
 
 #run main program
 if(__name__ == "__main__"):
+    mp.set_start_method('spawn')
     main()
