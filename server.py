@@ -48,12 +48,12 @@ def deliver_messages(dest, msg, address, message_queue):
         print("Not in the dictionary yet...")
         # send a no message response. Inbox is empty
         hot_mess = []
-        sock.sendto(pickle.dumps(hot_mess), (address[0], address[1]))
+        sock.sendto(pickle.dumps(hot_mess), (dest, address[1]))
     else:
         # We are going to either want to fix client to listen properly, or make the server send all client dicts in a array or something.
         client_msgs = message_dict[dest]
         print("client msgs to deliver" + str(client_msgs))
-        sock.sendto(pickle.dumps(client_msgs), (address[0], address[1]))
+        sock.sendto(pickle.dumps(client_msgs), (dest, address[1]))
     message_queue.put(message_dict)
         # wait for some amount of time in order to get all the acks from client for messages in sent list.
         # Waiting for ACKS needs to happen right here. An ACK function should be used. The message queue will not
@@ -76,11 +76,13 @@ def store_message(dest, msg, message_queue):
         message_queue.put(message_dict)
 
 def handle_acknowledgement(seq_list, client, message_queue):
+    print("Acknowledging Messagees...")
     message_dict = message_queue.get()
     list_of_messages = message_dict[client]
-    for idx in list_of_messages:
-        if idx['seq_num'] in seq_list:
+    for idx in list_of_messages[:]:
+        if idx['seq'] in seq_list:
             list_of_messages.remove(idx)
+            print("Removed message: ", str(idx['seq']))
     message_dict[client] = list_of_messages
     message_queue.put(message_dict)
 
