@@ -11,6 +11,7 @@ SERVER_ADDRESS = str(socket.gethostbyname(socket.gethostname()))
 SERVER_ID = 'Server Host'
 message_queue = Queue() # declare the message queue
 message_list = { 'client_ip' : [] } #THIS IS ACTUALLY A MESSAGE DICTIONARY
+client_dict = {'name': ""} # this the list of connected clients
 message_queue.put(message_list) # now we have an empty dictionary in the queue
 
 def receive_message(message_queue):
@@ -39,6 +40,10 @@ def receive_message(message_queue):
         pha.join()
         pha.terminate()'''
         handle_acknowledgement(message['payload'], message['source'], message_queue)
+    if (message ['type'] == 'handshake'):
+        global client_list
+        print ("Trying to handshake...\n")
+        handshake(sock, message['source'], message['name'], client_list)
 
     # iterate over the list of stored messages for a particular client.
     # Send each message individually.
@@ -86,7 +91,10 @@ def handle_acknowledgement(seq_list, client, message_queue):
     message_dict[client] = list_of_messages
     message_queue.put(message_dict)
 
-
+def handshake(sock, source, name, client_dict):
+    print ("Sending client list to new client \n")
+    sock.sendto(pickle.dumps(client_dict), (source, address[1])) #send this to the person handshaking
+    client_dict[name] = source #add a new entry in the dictionary for the connected client
     # this connection shit is fine
 try:
     sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -104,16 +112,19 @@ print ("server started on port: " + str(UDP_PORT))
 #data structure for messages per client. { client ip : [list of messages] }
 
 
-while True:
-    '''p = Process(target=receive_message, args=(message_queue,)) # start process to do listening
-    p.start() #start the listening
-    p.join() # lock access to the queue
-    p.terminate()'''
-    receive_message(message_queue)
-
-
-
-
+if __name__ == '__main__':
+    if __name__ == '__main__':
+        if __name__ == '__main__':
+            if __name__ == '__main__':
+                while True:
+                    '''p = Process(target=receive_message, args=(message_queue,)) # start process to do listening
+                    p.start() #start the listening
+                    p.join() # lock access to the queue
+                    p.terminate()'''
+                    receive_message(message_queue)
+                    #should do some sort of time_elapsed - run_time > something check so that we do this every once in a while.
+                    #Flood clients with handshakes in order to ensure that they are still connected
+                    #Probably flood other servers here too.
 
 '''def listen_mode():
     print ("listen for data....")
