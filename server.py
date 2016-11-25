@@ -11,21 +11,101 @@ SERVER_ADDRESS = str(socket.gethostbyname(socket.gethostname()))
 SERVER_ID = 'Server Host'
 message_queue = Queue() # declare the message queue
 message_list = { 'client_ip' : [] } #THIS IS ACTUALLY A MESSAGE DICTIONARY
-client_dict = {'client_ip': ""} # this the list of connected clients
+client_list = [] # this the list of connected clients
 message_queue.put(message_list) # now we have an empty dictionary in the queue
+neighbor1 = ""
+neighbor2 = ""
+lifetime_max = 3
+
+#this data structure is the routing table with keys client_ip and a list with entries:
+#list[0] is the ip of the server
+#list[1] is the number of hops to reach the client.
+routing_table = { 'client_ip' : []}
+#===================================================================================================
+#ROUTING TABLE UPDATE IMPLEMENTATION NOTES
+#We will need to pass these routing tables back and forth between servers at some interval.
+#We should update these tables when a new handshake occurs.
+#We will have to send THIS servers routing table to each one of our neighbours.
+#USing the principal of optimality.
+#The neighbour (we) will check to see if we have each of the neighbours clients in our own routing table.
+#If we have that client, then whatever do nothing.
+#If we dont have that client, then we need to add that client into out own routing table. When this is done _ things must happen:
+#1: When adding client into table, change the list[0] value to be the server that gave us the table we are looking at.
+#2: add 1 to the list[1] value so that we know the number of hops to the server. This is not being used right now, but may as well keep track of it.
+#===================================================================================================
+
+#Given a dest (client) return the server IP that that client is connected to as far as THIS server knows.
+def check_table(dest):
+    global routing_table
+    if(dest in routing_table):
+        return routing_table[dest][0]
+    else:
+        return "0"
+
+def send_get_request(source):
+    global neighbor1
+    global neighbor2
+    global UDP_PORT
+    mess = {'type' : "server_get" , 'server_source' : socket.gethostbyname(socket.gethostname()), 'source' : source, 'life_time' : 0}
+    sock.sendto(pickle.dumps(mess),(neighbor1,UDP_PORT))
+    sock.sendto(pickle.dumps(mess),(neighbor2, UDP_PORT))
+
+#Server_get type meswsage received by server.
+#If we have messages for the gets source, send them back.
+#Also send the request on, incase other servers have messages.
+def handle_server_get(message, message_queue):
+    temp_dict = message_queue.get()
+    if message['source'] in temp_dict:
+        mess = {'type': "server_deliver", 'destination' : message['source'], 'payload' : temp_dict[message['source']]}
+        sock.sendto(pickle.dumps(mess),(check_table(message['source']),UDP_PORT))
+    message['life_time'] += 1
+    if(message['server_source'] == neighbor1):
+        message['server_source'] = socket.gethostbyname(socket.gethostname())
+        sock.sendto(pickle.dumps(message),(neighbor2,UDP_PORT))
+    else:
+        message['server_source'] = socket.gethostbyname(socket.gethostname())
+        sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
+    message_queue.put(temp_dict)
 
 def receive_message(message_queue):
+    global client_list
     data, address = sock.recvfrom(1024)  # listen on socket for messages
     print("Attempting to decode the death star plans...")
     message = pickle.loads(data)  # load received data into message
     print("MESSAGE RAW: ", str(message))  # show the contents of the message for now
     # if the message is of type 'send', output flag, call store_message
+    #SEND SEND SEND SEND SEND SEND SEND SEND SEND SEND SEND SEND SEND SEND SEND SEND
     if (message['type'] == 'send'):
-        print("Message recieved, storing...")
-        store_message(message['destination'], message, message_queue)
+        print("Message recieved, deciding what to do...")
+        if(message['destination'] in client_list):
+            store_message(message['destination'], message, message_queue)
+        elif(message['destination'] not in client_list):
+            #check the routing table for a route.
+            destination = check_table(message['destination'])
+            if(destination != "0"):
+                #destination is correct, send message along.
+                sock.sendto(pickle.dumps(message),(destination,UDP_PORT))
+            else:
+                #Destination was not in routing table. Stor it
+                store_message(message['destination'],message,message_queue)
+    #GET GET GET GET GET GET GET GET GET GET GET GET GET GET GET GET GET GET GET GET
     if (message['type'] == 'get'):
         print("Deliver messages...")
-        deliver_messages(message['source'], message, address, message_queue)
+        if (message['source'] in client_list):
+            deliver_messages(message['source'], address, message_queue)
+            send_get_request(message['source'])
+            #deliver_messages(message['source'], message, address, message_queue)
+    #SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET
+    if(message['type'] == 'server_get'):
+        if(message['lifr_time'] < lifetime_max):
+            handle_server_get(message, message_queue)
+        #If the life time is three or greater, we just drop it.
+    #SERVER_DELIVERY SERVER_DELIVERY SERVER_DELIVERY SERVER_DELIVERY SERVER_DELIVERY SERVER_DELIVERY
+    if(message['type'] == "server_deliver"):
+        if(message['destination'] in client_list):
+            temp_dict = message_queue.get()
+            temp_dict[message['destination']].append(message['payload'])
+            message_queue.put(temp_dict)
     if (message['type'] == 'ack'):
         handle_acknowledgement(message['payload'], message['source'], message_queue)
     if (message ['type'] == 'handshake'):
@@ -34,7 +114,7 @@ def receive_message(message_queue):
 
     # iterate over the list of stored messages for a particular client.
     # Send each message individually.
-def deliver_messages(dest, msg, address, message_queue):
+def deliver_messages(dest, address, message_queue):
     message_dict = message_queue.get()
     if dest not in message_dict:
         print("Not in the message dictionary yet...")
@@ -56,12 +136,12 @@ def deliver_messages(dest, msg, address, message_queue):
 def store_message(dest, msg, message_queue):
     message_dict = message_queue.get()  # get the dictionary from the queue
     if dest in message_dict:
-        print("dest already in list, adding msg to it")
+        print("Dest already in list, adding msg to it")
         message_dict[dest].append(msg)  # put the entry in the dictionary of lists of dictionaries
         message_queue.put(message_dict)  # put the dictionary in the queue
 
     else:
-        print("dest not in list, creating new list")
+        print("Dest not in list, creating new list")
         newList = []
         newList.append(msg)
         message_dict[dest] = newList
@@ -79,12 +159,14 @@ def handle_acknowledgement(seq_list, client, message_queue):
     message_queue.put(message_dict)
 
 def handshake(sock, source):
-    global client_dict
+    global client_list
     global message_list
+    global routing_table
     print ("Recieved handshake.\n")
     #sock.sendto(pickle.dumps(client_dict), (source, address[1])) #send this to the person handshaking
-    client_dict[source] = source #add a new entry in the dictionary for the connected client
+    client_list.append(source) #add a new entry in the dictionary for the connected client
     message_list[source] = [] #Create a mailbox for the client on this server.
+    routing_table[source] = [source, 0] #add the client to routing table.
     # this connection shit is fine
 try:
     sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)

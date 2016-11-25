@@ -5,7 +5,7 @@ import multiprocessing as mp
 from multiprocessing import Process
 import sys
 import os
-
+#as of right now (November 24, 2016 @ 19:52) Client shouldn't have to ever have any major changes.
 '''Servers IP address'''
 SERVER_IP = "10.76.134.106"
 UDP_PORT = 5007
