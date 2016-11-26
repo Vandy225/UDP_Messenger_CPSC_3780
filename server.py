@@ -137,6 +137,33 @@ def receive_message(message_queue):
         '''message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': }
         sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
         sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))'''
+    if(message['type'] == 'exit' and message['life_time'] < lifetime_max):
+        print ("client " + message['source'] + " is disconnecting")
+        #call function to delete user from routing table and client_list
+        user_disconnect(message, routing_table, client_list, message_queue)
+
+
+def user_disconnect(message, routing_table, client_list, message_queue):
+    global UDP_PORT
+    global neighbor1
+    global neighbor2
+    if (message['source]'] in routing_table):
+        del routing_table[message['source']] #delete the client from the routing tbale
+    for idx in client_list:
+        if (message['source'] == idx):
+            print("deleting client " + message['source'] + " from client_list...")
+            del client_list[idx]
+    #delete messages destined for exiting client.
+    temp_dict = message_queue.get()
+    if(message['source'] in temp_dict):
+        print("deleting messages for client: " + message['source'] + " from message inbox...")
+        del temp_dict[message['source']]
+    message_queue.put(temp_dict)
+    #now we must tell other servers to do the same.
+    print("Forwarding exit to neighbours...")
+    message['life_time'] += 1
+    sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
+    sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
 
     # iterate over the list of stored messages for a particular client.
     # Send each message individually.

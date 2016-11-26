@@ -13,7 +13,7 @@ UDP_ACK_PORT = 5009
 SERVER_PORT = 5005
 SERVER_ACK_PORT = 5006
 seq_num = 0
-message = { 'seq' : seq_num, 'type' : '' , 'source' : socket.gethostbyname(socket.gethostname()), 'destination' : '10.76.69.237', 'payload' : ''}
+# message = { 'seq' : seq_num, 'type' : '' , 'source' : socket.gethostbyname(socket.gethostname()), 'destination' : '10.76.69.237', 'payload' : ''}
 
 def user_listen(sock):
     global SERVER_IP
@@ -42,6 +42,10 @@ def send_mode(sock):
         thing = input("Message: ")
         if(thing == '' and client_destination == ''):
             user_listen(sock)
+        elif(client_destination == "disconnect"):
+            message = {'type': 'exit', 'source': socket.gethostbyname(socket.gethostname()), 'life_time': 0}
+            sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
+            sys.exit()
         else:
             global SERVER_IP 
             global SERVER_PORT
