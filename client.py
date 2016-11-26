@@ -1,13 +1,10 @@
 import pickle
 import socket
 import sys
-import multiprocessing as mp
-from multiprocessing import Process
-import sys
 import os
 #as of right now (November 24, 2016 @ 19:52) Client shouldn't have to ever have any major changes.
 '''Servers IP address'''
-SERVER_IP = "10.76.134.106"
+SERVER_IP = "10.76.69.237"
 UDP_PORT = 5007
 UDP_ACK_PORT = 5009
 SERVER_PORT = 5005
@@ -27,13 +24,16 @@ def user_listen(sock):
     ack_list = []
     if message_list:
         for index in message_list:
-            print ("Received Message: " + str(index['payload']))#this may change... JOSH
+            print ("Message: " + str(index['payload'])) + " From: " + str(index['source']) #this may change... JOSH
             ack_list.append(index['seq'])
         ack_handle(ack_list,sock)
     else:
         print("No Messages right now. Check back later.\n")
 
 def send_mode(sock):
+    global SERVER_IP
+    global SERVER_PORT
+    global seq_num
     #Open the same stdin as main.
     #sys.stdin = os.fdopen(fileno)
     while True:
@@ -45,17 +45,16 @@ def send_mode(sock):
         elif(client_destination == "disconnect"):
             message = {'type': 'exit', 'source': socket.gethostbyname(socket.gethostname()), 'life_time': 0}
             sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
+            sock.shutdown(socket.SHUT_RDWR)
             sys.exit()
         else:
-            global SERVER_IP 
-            global SERVER_PORT
-            global seq_num
+            message = {}
             message['seq'] = seq_num
             print ("sending message with seq_num =" + str(message['seq']))
             message['payload'] = thing
             message['type'] = 'send'
-            message['seq'] = seq_num
             message['destination'] = client_destination
+            message['source'] = socket.gethostbyname(socket.gethostname())
             sock.sendto(pickle.dumps(message),(SERVER_IP,SERVER_PORT))
             seq_num += 1
 
@@ -86,7 +85,7 @@ def main():
     #Setting up the LISTENING udp portion
     sock.bind((socket.gethostbyname(socket.gethostname()),UDP_PORT))
     handshake (sock) #handshake with server to be admitted
-    user_listen(sock)
+    # user_listen(sock)
     while True:
         send_mode(sock)
 

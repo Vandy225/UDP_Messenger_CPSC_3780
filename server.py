@@ -1,7 +1,10 @@
 import socket
 import pickle
-import threading
-from multiprocessing import Queue, Process
+# from multiprocessing import Queue, Process
+try:
+    import Queue
+except ImportError:
+    import queue as Queue
 import time
 import sys
 
@@ -9,7 +12,7 @@ UDP_PORT = 5005
 UDP_ACK_PORT = 5006
 SERVER_ADDRESS = str(socket.gethostbyname(socket.gethostname()))
 SERVER_ID = 'Server Host'
-message_queue = Queue() # declare the message queue
+message_queue = Queue.Queue() # declare the message queue
 message_list = { 'client_ip' : [] } #THIS IS ACTUALLY A MESSAGE DICTIONARY
 client_list = [] # this the list of connected clients
 message_queue.put(message_list) # now we have an empty dictionary in the queue
@@ -75,6 +78,7 @@ def handle_server_get(message, message_queue):
     temp_dict = message_queue.get()
     if message['source'] in temp_dict:
         mess = {'type': "server_deliver", 'destination' : message['source'], 'payload' : temp_dict[message['source']]}
+        print ("SERVER GET ROUTING TABLE CHECK = " + str(check_table(message['source'])))
         sock.sendto(pickle.dumps(mess),(check_table(message['source']),UDP_PORT))
     message['life_time'] += 1
     if(message['server_source'] == neighbor1):
@@ -137,7 +141,7 @@ def receive_message(message_queue):
         '''message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': }
         sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
         sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))'''
-    if(message['type'] == 'exit' and message['life_time'] < lifetime_max):
+    if(message['type'] == 'exit' and message['life_time'] < lifetime_max + 1):
         print ("client " + message['source'] + " is disconnecting")
         #call function to delete user from routing table and client_list
         user_disconnect(message, routing_table, client_list, message_queue)
@@ -147,18 +151,21 @@ def user_disconnect(message, routing_table, client_list, message_queue):
     global UDP_PORT
     global neighbor1
     global neighbor2
-    if (message['source]'] in routing_table):
+    if (message['source'] in routing_table):
         del routing_table[message['source']] #delete the client from the routing tbale
-    for idx in client_list:
+    #this may need work
+    for idx in client_list[:]:
         if (message['source'] == idx):
             print("deleting client " + message['source'] + " from client_list...")
-            del client_list[idx]
+            client_list.remove(idx)
     #delete messages destined for exiting client.
+    '''
     temp_dict = message_queue.get()
     if(message['source'] in temp_dict):
         print("deleting messages for client: " + message['source'] + " from message inbox...")
         del temp_dict[message['source']]
     message_queue.put(temp_dict)
+    '''
     #now we must tell other servers to do the same.
     print("Forwarding exit to neighbours...")
     message['life_time'] += 1
@@ -218,13 +225,17 @@ def handshake(sock, source):
     print ("Recieved handshake.\n")
     #sock.sendto(pickle.dumps(client_dict), (source, address[1])) #send this to the person handshaking
     client_list.append(source) #add a new entry in the dictionary for the connected client
-    message_list[source] = [] #Create a mailbox for the client on this server.
+    if (source not in message_list):
+        message_list[source] = [] #Create a mailbox for the client on this server.
     routing_table[source] = [source, 0] #add the client to routing table.
     message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': 0}
     print("Sending table to neighbors")
     sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
     sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
     # this connection shit is fine
+    initial_server_get_message = {'type': 'server_get', 'source': source,'server_source': socket.gethostbyname(socket.gethostname()), 'life_time': 0}
+    sock.sendto(pickle.dumps(initial_server_get_message), (neighbor1, UDP_PORT))
+    sock.sendto(pickle.dumps(initial_server_get_message), (neighbor2, UDP_PORT))
 try:
     sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     sock2 = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
