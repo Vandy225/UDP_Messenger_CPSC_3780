@@ -13,14 +13,14 @@ message_queue = Queue() # declare the message queue
 message_list = { 'client_ip' : [] } #THIS IS ACTUALLY A MESSAGE DICTIONARY
 client_list = [] # this the list of connected clients
 message_queue.put(message_list) # now we have an empty dictionary in the queue
-neighbor1 = ""
-neighbor2 = ""
+neighbor1 = "10.76.134.106"
+neighbor2 = "10.76.134.106"
 lifetime_max = 1
 
 #this data structure is the routing table with keys client_ip and a list with entries:
 #list[0] is the ip of the server
 #list[1] is the number of hops to reach the client.
-routing_table = { 'client_ip' : []}
+routing_table = {}
 #===================================================================================================
 #ROUTING TABLE UPDATE IMPLEMENTATION NOTES
 #We will need to pass these routing tables back and forth between servers at some interval.
@@ -41,11 +41,14 @@ def update_routing_table(my_table, message):
         if client_ip not in my_table:
             my_table[client_ip] = [message['server_source'],your_table[client_ip][1]+1] #add to my table
         else:
+            index = your_table[client_ip][1]
+            print ("" + str(index))
             if your_table[client_ip][1] + 1 < my_table[client_ip][1]:
                 my_table[client_ip] = [message['server_source'], your_table[client_ip][1] + 1]
 
     message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()),
                'payload': routing_table, 'life_time': message['life_time'] + 1}
+    print ("Sending table to neighbors")
     sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
     sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
 
@@ -128,8 +131,9 @@ def receive_message(message_queue):
         print ("Trying to handshake...\n")
         handshake(sock, message['source'])
     if (message['type'] == 'routing_update'):
+        print("Received table from " + message['server_source'])
         if (message['life_time'] < lifetime_max):
-            update_routing_table(my_table, message)
+            update_routing_table(routing_table, message)
         '''message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': }
         sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
         sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))'''
@@ -190,6 +194,7 @@ def handshake(sock, source):
     message_list[source] = [] #Create a mailbox for the client on this server.
     routing_table[source] = [source, 0] #add the client to routing table.
     message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': 0}
+    print("Sending table to neighbors")
     sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
     sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
     # this connection shit is fine
