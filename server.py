@@ -15,7 +15,7 @@ client_list = [] # this the list of connected clients
 message_queue.put(message_list) # now we have an empty dictionary in the queue
 neighbor1 = ""
 neighbor2 = ""
-lifetime_max = 3
+lifetime_max = 1
 
 #this data structure is the routing table with keys client_ip and a list with entries:
 #list[0] is the ip of the server
@@ -33,6 +33,21 @@ routing_table = { 'client_ip' : []}
 #1: When adding client into table, change the list[0] value to be the server that gave us the table we are looking at.
 #2: add 1 to the list[1] value so that we know the number of hops to the server. This is not being used right now, but may as well keep track of it.
 #===================================================================================================
+def update_routing_table(my_table, message):
+    #iterate over the clients in the received routing table
+    your_table = message['payload']
+    for client_ip in your_table:
+        #if our table does not have an entry for a client, add it
+        if client_ip not in my_table:
+            my_table[client_ip] = [message['server_source'],your_table[client_ip][1]+1] #add to my table
+        else:
+            if your_table[client_ip][1] + 1 < my_table[client_ip][1]:
+                my_table[client_ip] = [message['server_source'], your_table[client_ip][1] + 1]
+
+    message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()),
+               'payload': routing_table, 'life_time': message['life_time'] + 1}
+    sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
+    sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
 
 #Given a dest (client) return the server IP that that client is connected to as far as THIS server knows.
 def check_table(dest):
@@ -69,6 +84,7 @@ def handle_server_get(message, message_queue):
 
 def receive_message(message_queue):
     global client_list
+    global routing_table
     data, address = sock.recvfrom(1024)  # listen on socket for messages
     print("Attempting to decode the death star plans...")
     message = pickle.loads(data)  # load received data into message
@@ -97,7 +113,7 @@ def receive_message(message_queue):
             #deliver_messages(message['source'], message, address, message_queue)
     #SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET
     if(message['type'] == 'server_get'):
-        if(message['lifr_time'] < lifetime_max):
+        if(message['life_time'] < lifetime_max):
             handle_server_get(message, message_queue)
         #If the life time is three or greater, we just drop it.
     #SERVER_DELIVERY SERVER_DELIVERY SERVER_DELIVERY SERVER_DELIVERY SERVER_DELIVERY SERVER_DELIVERY
@@ -111,6 +127,12 @@ def receive_message(message_queue):
     if (message ['type'] == 'handshake'):
         print ("Trying to handshake...\n")
         handshake(sock, message['source'])
+    if (message['type'] == 'routing_update'):
+        if (message['life_time'] < lifetime_max):
+            update_routing_table(my_table, message)
+        '''message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': }
+        sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
+        sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))'''
 
     # iterate over the list of stored messages for a particular client.
     # Send each message individually.
@@ -167,6 +189,9 @@ def handshake(sock, source):
     client_list.append(source) #add a new entry in the dictionary for the connected client
     message_list[source] = [] #Create a mailbox for the client on this server.
     routing_table[source] = [source, 0] #add the client to routing table.
+    message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': 0}
+    sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
+    sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
     # this connection shit is fine
 try:
     sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
