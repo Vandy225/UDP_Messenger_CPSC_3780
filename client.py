@@ -2,6 +2,7 @@ import pickle
 import socket
 import sys
 import os
+import time
 #as of right now (November 24, 2016 @ 19:52) Client shouldn't have to ever have any major changes.
 '''Servers IP address'''
 SERVER_IP = "10.76.69.237"
@@ -19,12 +20,12 @@ def user_listen(sock):
     print ("Trying to send get...")
     sock.sendto(pickle.dumps(msg),(SERVER_IP,SERVER_PORT))
     print ("Waiting for server response...")
-    data, address = sock.recvfrom(1024)
+    data, address = sock.recvfrom(10240)
     message_list = pickle.loads(data) #now the client is getting the entire message list, need to iterate through
     ack_list = []
     if message_list:
         for index in message_list:
-            print ("Message: " + str(index['payload'])) + " From: " + str(index['source']) #this may change... JOSH
+            print ("Message: " + index['payload'] + " From: " + index['source']) #this may change... JOSH
             ack_list.append(index['seq'])
         ack_handle(ack_list,sock)
     else:
@@ -69,6 +70,8 @@ def handshake(sock):
     msg = {'type': "handshake", 'source': socket.gethostbyname(socket.gethostname())}
     print ("Handshaking with server...\n")
     sock.sendto(pickle.dumps(msg), (SERVER_IP, SERVER_PORT))
+    print ("waiting 0.5 seconds")
+    time.sleep(0.5)
     user_listen(sock) #listen back from server
 
 def main():

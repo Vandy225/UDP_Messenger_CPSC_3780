@@ -17,7 +17,7 @@ message_list = { 'client_ip' : [] } #THIS IS ACTUALLY A MESSAGE DICTIONARY
 client_list = [] # this the list of connected clients
 message_queue.put(message_list) # now we have an empty dictionary in the queue
 neighbor1 = "10.76.134.106"
-neighbor2 = "10.76.134.106"
+#neighbor2 = "10.76.134.106"
 lifetime_max = 1
 
 #this data structure is the routing table with keys client_ip and a list with entries:
@@ -53,7 +53,7 @@ def update_routing_table(my_table, message):
                'payload': routing_table, 'life_time': message['life_time'] + 1}
     print ("Sending table to neighbors")
     sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
-    sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
+    #sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
 
 #Given a dest (client) return the server IP that that client is connected to as far as THIS server knows.
 def check_table(dest):
@@ -69,7 +69,7 @@ def send_get_request(source):
     global UDP_PORT
     mess = {'type' : "server_get" , 'server_source' : socket.gethostbyname(socket.gethostname()), 'source' : source, 'life_time' : 0}
     sock.sendto(pickle.dumps(mess),(neighbor1,UDP_PORT))
-    sock.sendto(pickle.dumps(mess),(neighbor2, UDP_PORT))
+    #sock.sendto(pickle.dumps(mess),(neighbor2, UDP_PORT))
 
 #Server_get type meswsage received by server.
 #If we have messages for the gets source, send them back.
@@ -79,11 +79,12 @@ def handle_server_get(message, message_queue):
     if message['source'] in temp_dict:
         mess = {'type': "server_deliver", 'destination' : message['source'], 'payload' : temp_dict[message['source']]}
         print ("SERVER GET ROUTING TABLE CHECK = " + str(check_table(message['source'])))
+        print ("Deliver messages to server: " + str(message['server_source']))
         sock.sendto(pickle.dumps(mess),(check_table(message['source']),UDP_PORT))
     message['life_time'] += 1
     if(message['server_source'] == neighbor1):
         message['server_source'] = socket.gethostbyname(socket.gethostname())
-        sock.sendto(pickle.dumps(message),(neighbor2,UDP_PORT))
+        #sock.sendto(pickle.dumps(message),(neighbor2,UDP_PORT))
     else:
         message['server_source'] = socket.gethostbyname(socket.gethostname())
         sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
@@ -92,7 +93,7 @@ def handle_server_get(message, message_queue):
 def receive_message(message_queue):
     global client_list
     global routing_table
-    data, address = sock.recvfrom(1024)  # listen on socket for messages
+    data, address = sock.recvfrom(10240)  # listen on socket for messages
     print("Attempting to decode the death star plans...")
     message = pickle.loads(data)  # load received data into message
     print("MESSAGE RAW: ", str(message))  # show the contents of the message for now
@@ -115,8 +116,9 @@ def receive_message(message_queue):
     if (message['type'] == 'get'):
         print("Deliver messages...")
         if (message['source'] in client_list):
-            deliver_messages(message['source'], address, message_queue)
             send_get_request(message['source'])
+            deliver_messages(message['source'], address, message_queue)
+
             #deliver_messages(message['source'], message, address, message_queue)
     #SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET SERVER_GET
     if(message['type'] == 'server_get'):
@@ -127,8 +129,11 @@ def receive_message(message_queue):
     if(message['type'] == "server_deliver"):
         if(message['destination'] in client_list):
             temp_dict = message_queue.get()
-            temp_dict[message['destination']].append(message['payload'])
+            for mes in message['payload']:
+                temp_dict[message['destination']].append(mes)
             message_queue.put(temp_dict)
+            #issues here
+            deliver_messages(message['destination'], address, message_queue)
     if (message['type'] == 'ack'):
         handle_acknowledgement(message['payload'], message['source'], message_queue)
     if (message ['type'] == 'handshake'):
@@ -170,7 +175,7 @@ def user_disconnect(message, routing_table, client_list, message_queue):
     print("Forwarding exit to neighbours...")
     message['life_time'] += 1
     sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
-    sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
+    #sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
 
     # iterate over the list of stored messages for a particular client.
     # Send each message individually.
@@ -224,18 +229,19 @@ def handshake(sock, source):
     global routing_table
     print ("Recieved handshake.\n")
     #sock.sendto(pickle.dumps(client_dict), (source, address[1])) #send this to the person handshaking
-    client_list.append(source) #add a new entry in the dictionary for the connected client
+    if (source not in client_list):
+        client_list.append(source) #add a new entry in the dictionary for the connected client
     if (source not in message_list):
         message_list[source] = [] #Create a mailbox for the client on this server.
     routing_table[source] = [source, 0] #add the client to routing table.
     message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': 0}
     print("Sending table to neighbors")
     sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
-    sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
+    #sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
     # this connection shit is fine
     initial_server_get_message = {'type': 'server_get', 'source': source,'server_source': socket.gethostbyname(socket.gethostname()), 'life_time': 0}
     sock.sendto(pickle.dumps(initial_server_get_message), (neighbor1, UDP_PORT))
-    sock.sendto(pickle.dumps(initial_server_get_message), (neighbor2, UDP_PORT))
+    #sock.sendto(pickle.dumps(initial_server_get_message), (neighbor2, UDP_PORT))
 try:
     sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     sock2 = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
