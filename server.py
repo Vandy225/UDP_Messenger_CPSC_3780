@@ -40,17 +40,18 @@ def update_routing_table(message):
     global routing_table
     #iterate over the clients in the received routing table
     your_table = message['payload']
-    for client_ip in your_table:
+    for user in your_table:
         #if our table does not have an entry for a client, add it
-        if client_ip not in routing_table:
-            print("Learned about a new client " + client_ip + " owned by " + your_table[client_ip][0])
-            routing_table[client_ip] = [message['server_source'],your_table[client_ip][1]+1] #add to my table
+        if user not in routing_table:
+            print("Learned about a new client " + user + " owned by " + your_table[user][0])
+            #USER CHANGE #2
+            routing_table[user] = [message['server_source'],your_table[user][1]+1,your_table[user][2]] #add to my table
         else:
-            index = your_table[client_ip][1]
+            index = your_table[user][1]
             print ("" + str(index))
-            if your_table[client_ip][1] + 1 < routing_table[client_ip][1]:
+            if your_table[user][1] + 1 < routing_table[user][1]:
                 print("Got better info about a client from a neighbor....")
-                routing_table[client_ip] = [message['server_source'], your_table[client_ip][1] + 1]
+                routing_table[user] = [message['server_source'], your_table[user][1] + 1,your_table[user][2]]
 
     message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()),
                'payload': routing_table, 'life_time': message['life_time'] + 1}
@@ -59,10 +60,10 @@ def update_routing_table(message):
     #sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
 
 #Given a dest (client) return the server IP that that client is connected to as far as THIS server knows.
-def check_table(dest):
+def check_table(user_name):
     global routing_table
-    if(dest in routing_table):
-        return routing_table[dest][0]
+    if(user_name in routing_table):
+        return routing_table[user_name][0]
     else:
         return "0"
 
@@ -163,8 +164,8 @@ def user_disconnect(message, routing_table, client_list, message_queue):
     global UDP_PORT
     global neighbor1
     global neighbor2
-    if (message['source'] in routing_table):
-        del routing_table[message['source']] #delete the client from the routing tbale
+    if (message['user_name'] in routing_table):
+        del routing_table[message['user_name']] #delete the client from the routing tbale
     #this may need work
     for idx in client_list[:]:
         if (message['source'] == idx):
@@ -180,6 +181,7 @@ def user_disconnect(message, routing_table, client_list, message_queue):
     # iterate over the list of stored messages for a particular client.
     # Send each message individually.
 def deliver_messages(dest, address, message_queue):
+    global routing_table
     message_dict = message_queue.get()
     if dest not in message_dict:
         print("Not in the message dictionary yet...")
@@ -227,25 +229,38 @@ def handle_acknowledgement(message,message_queue):
     sock.sendto(pickle.dumps(message),(neighbor1,UDP_PORT))
     #sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
 
-def handshake(sock, source):
+def handshake(sock, source, user_name):
     global client_list
     global message_list
     global routing_table
     print ("Recieved handshake.\n")
-    #sock.sendto(pickle.dumps(client_dict), (source, address[1])) #send this to the person handshaking
-    if (source not in client_list):
-        client_list.append(source) #add a new entry in the dictionary for the connected client
-    if (source not in message_list):
-        message_list[source] = [] #Create a mailbox for the client on this server.
-    routing_table[source] = [socket.gethostbyname(socket.gethostname()), 0] #add the client to routing table.
-    message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': 0}
-    print("Sending table to neighbors")
-    sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
-    #sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
-    # this connection shit is fine
-    initial_server_get_message = {'type': 'server_get', 'source': source,'server_source': socket.gethostbyname(socket.gethostname()), 'life_time': 0}
-    sock.sendto(pickle.dumps(initial_server_get_message), (neighbor1, UDP_PORT))
-    #sock.sendto(pickle.dumps(initial_server_get_message), (neighbor2, UDP_PORT))
+
+    #USER CHANGE #1 Trying to add user names.
+    if user_name not in routing_table:
+        user_ack = {'type' : 'user_good'}
+        sock.sendto(pickle.dumps(user_ack),(source,UDP_PORT))
+        routing_table[user_name] = [socket.gethostbyname(socket.gethostname()), 0, source] #add the client to routing table.
+        # sock.sendto(pickle.dumps(client_dict), (source, address[1])) #send this to the person handshaking
+        if (source not in client_list):
+            client_list.append(source)  # add a new entry in the dictionary for the connected client
+        if (source not in message_list):
+            message_list[source] = []  # Create a mailbox for the client on this server.
+        message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()),
+                   'payload': routing_table, 'life_time': 0}
+        print("Sending table to neighbors")
+        sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
+        # sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
+        # this connection shit is fine
+        initial_server_get_message = {'type': 'server_get', 'source': source,
+                                      'server_source': socket.gethostbyname(socket.gethostname()), 'life_time': 0}
+        sock.sendto(pickle.dumps(initial_server_get_message), (neighbor1, UDP_PORT))
+        # sock.sendto(pickle.dumps(initial_server_get_message), (neighbor2, UDP_PORT))
+    else:#username is not valid
+        #Send them a name_error
+        print ("Username already in use...")
+        user_ack = {'type': 'user_error'}
+        sock.sendto(pickle.dumps(user_ack), (source, UDP_PORT))
+
 try:
     sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     sock2 = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -269,3 +284,20 @@ if __name__ == '__main__':
         #Flood clients with handshakes in order to ensure that they are still connected
         #Probably flood other servers here too.
         #Adding a comment
+
+
+
+'''We are thinking of reqorking the entire cobase from the ground up.
+All packets being sent should be dictionaries. Every packet will have:
+1. Type - Indicates how receivers handle this packet
+2. life_time - How many hops the packet can make.
+3. Source - IP of  client sending
+4. Destination - IP of receiving client.
+5. Seq number (for packets sent from clients.
+
+Servers will hold a list of local clients in the fourm of a dictionary with pairs: user_name:'Users IP".
+Servers will hold a routing table of the form {User_name: [server host, hops, ip of user]}
+Servers will hand this to servers on a server update which occurs on handshakes.
+Servers will aslo hand their clients updated their routing tables with the list of messages that clients will be getting.
+SO that we can both update the clients user list (Basically a routing table) and read out their messages.
+ Users are identified by their user_name which should be unique in the network.'''

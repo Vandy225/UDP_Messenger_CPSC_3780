@@ -11,6 +11,7 @@ UDP_ACK_PORT = 5009
 SERVER_PORT = 5005
 SERVER_ACK_PORT = 5006
 seq_num = 0
+user_name = ''
 # message = { 'seq' : seq_num, 'type' : '' , 'source' : socket.gethostbyname(socket.gethostname()), 'destination' : '10.76.69.237', 'payload' : ''}
 
 def user_listen(sock):
@@ -31,6 +32,10 @@ def user_listen(sock):
             else:
                 inv_inbox[mess['source']] = [mess['seq']]
         ack_handle(inv_inbox,sock)
+    elif type(message_list) is dict:
+        #Special cases.
+        #if(message['type'] == 'name_error'):
+           # print("Username is already being used. Please enter another ")
     else:
         print("No Messages right now. Check back later.\n")
 
@@ -70,12 +75,25 @@ def ack_handle(inv_inbox,sock):
     sock.sendto(pickle.dumps(ack),(SERVER_IP,SERVER_PORT))
 
 def handshake(sock):
-    msg = {'type': "handshake", 'source': socket.gethostbyname(socket.gethostname())}
+    global user_name
+    user_name = input("What is your name?")
+    msg = {'type': "handshake", 'source': socket.gethostbyname(socket.gethostname()), 'user_name' : user_name}
     print ("Handshaking with server...\n")
     sock.sendto(pickle.dumps(msg), (SERVER_IP, SERVER_PORT))
     print ("waiting 0.5 seconds")
     time.sleep(0.5)
-    user_listen(sock) #listen back from server
+    #explicitly listen for user_error or user_accept packet.
+    good_name = False
+    while(not good_name):
+        data, address = sock.recvfrom(10240)
+        user_ack = pickle.loads(data)
+        if (user_ack['type'] == 'user_good'):
+            good_name = True
+            print ("Registration sucessful.")
+            user_listen(sock)  # listen back from server
+        elif (user_ack['type'] == 'user_error'):
+            print("user name is taken, try again.\n")
+            handshake(sock)
 
 def main():
     #fn = sys.stdin.fileno()
