@@ -36,20 +36,21 @@ routing_table = {}
 #1: When adding client into table, change the list[0] value to be the server that gave us the table we are looking at.
 #2: add 1 to the list[1] value so that we know the number of hops to the server. This is not being used right now, but may as well keep track of it.
 #===================================================================================================
-def update_routing_table(my_table, message):
+def update_routing_table(message):
+    global routing_table
     #iterate over the clients in the received routing table
     your_table = message['payload']
     for client_ip in your_table:
         #if our table does not have an entry for a client, add it
-        if client_ip not in my_table:
+        if client_ip not in routing_table:
             print("Learned about a new client " + client_ip + " owned by " + your_table[client_ip][0])
-            my_table[client_ip] = [message['server_source'],your_table[client_ip][1]+1] #add to my table
+            routing_table[client_ip] = [message['server_source'],your_table[client_ip][1]+1] #add to my table
         else:
             index = your_table[client_ip][1]
             print ("" + str(index))
-            if your_table[client_ip][1] + 1 < my_table[client_ip][1]:
+            if your_table[client_ip][1] + 1 < routing_table[client_ip][1]:
                 print("Got better info about a client from a neighbor....")
-                my_table[client_ip] = [message['server_source'], your_table[client_ip][1] + 1]
+                routing_table[client_ip] = [message['server_source'], your_table[client_ip][1] + 1]
 
     message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()),
                'payload': routing_table, 'life_time': message['life_time'] + 1}
@@ -99,7 +100,6 @@ def receive_message(message_queue):
     print("Attempting to decode the death star plans...")
     message = pickle.loads(data)  # load received data into message
     print("MESSAGE RAW: ", str(message))  # show the contents of the message for now
-
     #We have to check if a server has accidently received a list of messages.
     if type(message) is dict:
         # if the message is of type 'send', output flag, call store_message
@@ -140,17 +140,15 @@ def receive_message(message_queue):
                 #issues here
                 deliver_messages(message['destination'], address, message_queue)
         if (message['type'] == 'ack'):
-            handle_acknowledgement(message,message_queue)
+            if(message['life_time'] < lifetime_max):
+                handle_acknowledgement(message,message_queue)
         if (message ['type'] == 'handshake'):
             print ("Trying to handshake...\n")
             handshake(sock, message['source'])
         if (message['type'] == 'routing_update'):
             print("Received table from " + message['server_source'])
             if (message['life_time'] < lifetime_max):
-                update_routing_table(routing_table, message)
-            '''message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': }
-            sock.sendto(pickle.dumps(message), (neighbor1, UDP_PORT))
-            sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))'''
+                update_routing_table(message)
         if(message['type'] == 'exit' and message['life_time'] < lifetime_max + 1):
             print ("client " + message['source'] + " is disconnecting")
             #call function to delete user from routing table and client_list
@@ -173,13 +171,6 @@ def user_disconnect(message, routing_table, client_list, message_queue):
             print("deleting client " + message['source'] + " from client_list...")
             client_list.remove(idx)
     #delete messages destined for exiting client.
-    '''
-    temp_dict = message_queue.get()
-    if(message['source'] in temp_dict):
-        print("deleting messages for client: " + message['source'] + " from message inbox...")
-        del temp_dict[message['source']]
-    message_queue.put(temp_dict)
-    '''
     #now we must tell other servers to do the same.
     print("Forwarding exit to neighbours...")
     message['life_time'] += 1
@@ -224,32 +215,17 @@ def store_message(dest, msg, message_queue):
 def handle_acknowledgement(message,message_queue):
     print("Acknowledging Messagees...")
     inbox = message_queue.get()
-    '''#list_of_messages = message_dict[client]
-    for idx in list_of_messages[:]:
-        if idx['seq'] in seq_list:
-            list_of_messages.remove(idx)
-            print("Removed message: ", str(idx['seq']))
-    message_dict[client] = list_of_messages
-    message_queue.put(message_dict)'''
-    sauce = message['source']
-    ack_list = message['payload']
-    if(sauce in inbox):
-        print ("Ack source is in inbox...")
-        print ("For every message destined for " + str(sauce))
-        for mess in inbox[sauce][:]:
-            for dictionary in ack_list:
-                if sauce in dictionary and sauce == mess['destination']:
-                    print ("Checked that ack source is in one of dicts received.")
-                    if mess['seq'] in dictionary[sauce]:
-                        print ("Deleting message: " + mess['seq'] + " which was for " + str(sauce))
-                        inbox.remove(mess)
+    acker = message['source']
+    inv_inbox = message['payload']
+    for msg in inbox[acker][:]:
+        if msg['source'] in inv_inbox and msg['seq'] in inv_inbox[msg['source']]:
+            print ("Removed message: " + str(msg['seq']))
+            inbox[acker].remove(msg)
+    message_queue.put(inbox)
     #As long as we increment the life time, the packet will die. Also if we receive this ack set again, the above control block SHOULD stop it from accessing memory it shouldn't.
     message['life_time'] +=1
-    sock.sento(pickle.dumps(message),(neighbor1,UDP_PORT))
-    #sock.sento(pickle.dumps(message), (neighbor2, UDP_PORT))
-
-
-
+    sock.sendto(pickle.dumps(message),(neighbor1,UDP_PORT))
+    #sock.sendto(pickle.dumps(message), (neighbor2, UDP_PORT))
 
 def handshake(sock, source):
     global client_list

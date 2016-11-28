@@ -22,19 +22,15 @@ def user_listen(sock):
     print ("Waiting for server response...")
     data, address = sock.recvfrom(10240)
     message_list = pickle.loads(data) #now the client is getting the entire message list, need to iterate through
-    ack_list = []
     if message_list:
+        inv_inbox = {}
         for mess in message_list:
             print ("Message: " + mess['payload'] + " From: " + mess['source']) #this may change... JOSH
-            #Now we need to add the each message into the ack list.
-            for idx in ack_list:
-                if mess['source'] in idx:
-                    print ("1. Acknowledging message " + mess['seq'] + " from " + mess['source'])
-                    idx[mess['source']].append(mess['seq'])
-                else:
-                    print("2. Acknowledging message " + mess['seq'] + " from " + mess['source'])
-                    idx[mess['source']] = [mess['seq']]
-        ack_handle(ack_list,sock)
+            if mess['source'] in inv_inbox:
+                inv_inbox[mess['source']].append(mess['seq'])
+            else:
+                inv_inbox[mess['source']] = [mess['seq']]
+        ack_handle(inv_inbox,sock)
     else:
         print("No Messages right now. Check back later.\n")
 
@@ -67,10 +63,10 @@ def send_mode(sock):
             seq_num += 1
 
 
-def ack_handle(list_of_dict,sock):
+def ack_handle(inv_inbox,sock):
     global SERVER_ACK_PORT
     global SERVER_IP
-    ack = {'seq': '', 'type': 'ack', 'source': socket.gethostbyname(socket.gethostname()), 'destination': '','payload': list_of_dict}
+    ack = {'seq': '', 'type': 'ack', 'source': socket.gethostbyname(socket.gethostname()), 'payload': inv_inbox, 'life_time': 0}
     sock.sendto(pickle.dumps(ack),(SERVER_IP,SERVER_PORT))
 
 def handshake(sock):
