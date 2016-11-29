@@ -16,6 +16,11 @@ def handshake(sock):
     global user_name
     global seq_num
     user_name = raw_input("User Name: ")
+
+    if len(user_name) > 10:
+        print "User name > 10 characters, re-enter"
+        user_name = raw_input("User Name: ")
+
     message = {'seq' : seq_num, 'type': 'handshake', 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name}
     print "Handshaking with server..."
     sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
@@ -35,8 +40,67 @@ def handshake(sock):
         elif (user_ack['type'] == 'user_error'):
             print "username is taken, try again"
             handshake(sock)
+            user_listen(sock)#user needs to listen for initial messages
             
+def send_mode(sock):
+    global SERVER_IP
+    global SERVER_PORT
+    global seq_num
+    global user_name
+    
+    while True:
+        # get user input for recipient and payload
+        recipient = raw_input("Address to: ")
+        message = raw_input("Message: ")
+        #if the user enters nothing, we assume a get
+        if recipient == '' and message == '':
+            #listen for messages
+            user_listen(sock)
+        elif recipient == 'disconnect' and message == 'disconnect':
+            exit_message = {'type': 'exit', 'seq': seq_num, 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'life_time': -1}
+            print "sending notification of disconnect"
+            sock.sendto(pickle.dumps(exit_message), (SERVER_IP, SERVER_PORT))
+            sock.shudown(sock.SHUT_RDWR)
+            sys.exit()
+        else:
+            #user wants to send a message
+            new_message = {'seq': seq_num, 'type': 'send', 'payload': message, 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'destination': recipient}
+            print "constructed message to send, sending"
+            sock.sendto(pickle.dumps(new_message), (SERVER_IP, SERVER_PORT))
+            #incrementing sequence number
+            seq_num += 1
 
+def user_listen(sock):
+    global SERVER_IP
+    global SERVER_PORT
+    #contruct get type message
+    message = {'type': 'get', 'source': socket.gethostbyname(socket.gethostname())}
+    #send to server
+    sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
+    print "sent get, waiting for server response..."
+    data, address = sock.recvfrom(10240)
+    received_packet = pickle.loads(data)
+    if type(received_packet) is dict:
+        message_list = received_packet['payload'] #list of messages
+        inv_inbox = {} #this is for storing seq_nums to send acks back
+        for msg in message_list:
+            print "Message: ", msg['payload'], "From: ", msg['user_name']
+            if msg['user_name'] in inv_inbox:
+                inv_inbox[msg['user_name']].append(msg['seq'])
+            else:
+                inv_inbox[msg['user_name']] = [msg['seq']]
+        ack_handle(inv_inbox, sock)
+    #this condition is to say that an empty list was sent to the user, therefore no messages
+    else:
+        print "No messages now buckaroo"
+
+def ack_handle(inv_inbox, sock):
+    global SERVER_PORT
+    global SERVER_IP
+    global user_name
+    ack = {'type':'ack', 'source':socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'payload':inv_inbox, 'life_time':-1}
+sock.sendto(pickle.dumps(ack), (SERVER_IP,SERVER_PORT))
+            
 
 
 #main function
@@ -51,6 +115,8 @@ if __name__ == '__main__':
         sys.exit()
     #try and handshake with the server
     handshake(sock)
+    while True:
+        send_mode(sock)
 
         
     

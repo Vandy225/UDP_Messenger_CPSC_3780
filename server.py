@@ -17,6 +17,8 @@ routing_table = {} #dictionary that tells a client which server to send messages
 
 lifetime_max = 1 #for now...
 
+#lifetime_max = ceiling( number of servers/2)
+
 #this is the new receive_message
 def receive_packet (sock):
     global client_directory
@@ -45,13 +47,121 @@ def receive_packet (sock):
             print "received send type"
             send_handle(message, client_directory, routing_table, message_inbox) #working on
         if (message['type'] == 'handshake'):
+            print "received Handshake"
             handshake_response(message, client_directory, routing_table, message_inbox)
-        '''if (message['type'] == 'get'):
+        if (message['type'] == 'get'):
+            print "received get"
+            send_server_get(sock, message['user_name'], message['source'])
+            deliver_messages(message['user_name'], message_inbox)
         if (message['type'] == 'server_get'):
-        if (message['type'] == 'server_deliver'):    
-        if (message['type'] == 'ack'):
+            if(message['life_time'] < lifetime_max):
+                print "received good server_get"
+                handle_server_get(sock, message, message_inbox)
         if (message['type'] == 'routing_update'):
-        if (message['type'] == 'exit'):  '''  
+            if(message['lifetime'] < lifetime_max):
+                print "received good routing update"
+                update_routine_table(message, routing_table)
+        if (message['type'] == 'ack'):
+            if(message['life_time'] < lifetime_max):
+                print "Received ack..."
+                handle_ack(message, message_inbox)
+        if (message['type'] == 'server_deliver'):
+            if(message['user_name'] in client_directory):
+                   for msg in message['payload']:
+                       message_inbox[msg['destination']].append(msg)
+                   deliver_messages(message['destination'], message_inbox)
+        if (message['type'] == 'exit'):
+            if(message['life_time'] < lifetime_max):
+                user_disconnect(sock, message, client_directory, routing_table):
+
+def user_disconnect(sock, message, client_directory, routing_table):
+    global SERVER_PORT
+    global neighbor1
+    global neighbor2
+    user = message['user_name']
+    #need to delete user from the routing table.
+    print "deleteing user from routing table..."
+    if(user in routing_table):
+           del routing_table[user]
+    #remove from the client_directory
+    if(user in client_directory):
+        del client_directory[user]
+    print "Forwarding exit to neighbors..."
+    message['life_time']+=1
+    sock.sendto(pickle.dumps(message), (neighbor1,SERVER_PORT))
+    #sock.sendto(pickle.dumps(message), (neighbor2,SERVER_PORT))
+    
+     
+     
+
+#Remove messages from the inbox. Based on the inverse inbox sent by the acker.
+def handle_ack(message, message_inbox):
+    print "Acknowledging..."
+    acker = message['user_name']
+    inv_inbox = message['payload']
+    for msg in message_inbox[acker][:]:
+        if msg['user_name'] in inv_inbox and msg['seq'] in inv_inbox[msg['user_name']]:
+            print "Removed message: ", str(msg['seq'])
+            message_inbox[acker].remove(msg)
+    #avoid infinite sending....
+    message['life_time']+=1
+    sock.sendto(pickle.dumps(message), (neighbor1, SERVER_PORT))
+    #sock.sendto(pickle.dumps(message), (neighbor2, SERVER_PORT))
+    
+
+def update_routing_table(message, routing_table):
+    your_table = message['payload'] 
+    for user in your_table:
+        if user not in routing_table:
+            print "learned about a new client: ", user
+            #the entry in my routing table for the new user will be equal to the
+            #a list composed of:
+            #[0]: the assumed server host
+            #[1]: the number of hops to reach the new user from me through assumed host
+            #[2]: the user's ip address
+            routing_table[user] = [message['server_source'], your_table[user][1]+1, your_table[user][2]]
+        else:
+            #we already have an entry for a user, need to see if a better route exists
+            if your_table[user][1]+1 < routing_table[user][1]:
+                print "got better info about ", user, "from ", message['server_source']
+                routing_table[user] = [message['server_source'], your_table[user][1]+1, your_table[user][2]]
+    routing_update = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': message['life_time']+1}
+    sock.sendto(pickle.dumps(routing_update), (neighbor1, SERVER_PORT))
+    #sock.sendto(pickle.dumps(routing_update), (neighbor2, SERVER_PORT))
+
+def handle_server_get(sock, message, message_inbox):
+    global routing_table
+    if message['user_name'] in message_inbox:
+        server_deliver_message = {'type': 'server_deliver', 'destination': message['user_name'], 'payload': message_inbox[message['user_name']]}
+        print "this server is delivering messages to server ", message['server_source']
+        sock.sendto(pickle.dumps(server_deliver_message), (get_user_host(message['user_name'],routing_table), SERVER_PORT))
+    message['life_time'] += 1
+    if message['server_source'] is neighbor1:
+        message['server_source'] = socket.gethostbyname(socket.gethostname())
+        sock.sendto(pickle.dumps(server_deliver_message), (neighbor2, SERVER_PORT))
+    else:
+        message['server_source'] = socket.gethostbyname(socket.gethostname())
+        sock.sendto(pickle.dumps(server_deliver_message), (neighbor1, SERVER_PORT))
+    
+#this function is used to propagate a user's get request to servers
+def send_server_get(sock, user_name, user_ip):
+    global neighbor1
+    global neighbor2
+    global SERVER_PORT
+    server_get_send = {'type': 'server_get', 'server_source': socket.gethostbyname(socket.gethostname()), 'source': user_ip, 'user_name': user_name, 'life_time': 0}
+    sock.sendto(pickle.dumps(server_get_send), (neighbor1, SERVER_PORT))
+    # sock.sendto(pickle.dumps(server_get_send), (neighbor2, SERVER_PORT))
+    
+
+def deliver_messages(user_name, message_inbox):
+    global client_directory
+    if user_name in client_directory and user_name in message_inbox:
+        print "user_name: ", user_name, " was in client_directory and message_inbox, delivering"
+        delivery = {'payload': message_inbox[user_name]}
+        sock.sendto(pickle.dumps(delivery), (client_directory[user_name], CLIENT_PORT))
+    else:
+        # still want to send the client an empty list, will work out
+        print "deliver messages went wrong...."
 
 def handshake_response (message, client_directory, routing_table, message_inbox):
     #first we will check if the user name is being hosted by another server
@@ -71,9 +181,13 @@ def handshake_response (message, client_directory, routing_table, message_inbox)
             message_inbox[message['user_name']] = []
         routing_message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': 0}
         print "letting other servers know about new user via routing update"
-        #sock.sendto(pickle.dumps(routing_message), (neighbor1, SERVER_PORT))
+        sock.sendto(pickle.dumps(routing_message), (neighbor1, SERVER_PORT))
         #sock.sendto(pickle.dumps(routing_message), (neighbor2, SERVER_PORT))
         print "sending out server get to find messages for client: ", message['user_name']
+        server_get_send = {'type': 'server_get', 'server_source': socket.gethostbyname(socket.gethostname()), 'source': user_ip, 'user_name': user_name, 'life_time': 0}
+    sock.sendto(pickle.dumps(server_get_send), (neighbor1, SERVER_PORT))
+    # sock.sendto(pickle.dumps(server_get_send), (neighbor2, SERVER_PORT))
+        
         
     
 
