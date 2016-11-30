@@ -8,7 +8,7 @@ SERVER_PORT = 5005
 SERVER_ADDRESS = str(socket.gethostbyname(socket.gethostname()))
 message_inbox = {} # this will be the replacement for the queue
 client_directory = {} #this will be a dict of user_names : ip addresses that this server hosts
-neighbor1 = '' #*
+neighbor1 = '142.66.140.47'
 # neighbor2 = ''
 
 # the format for pairs in the table is:
@@ -58,9 +58,9 @@ def receive_packet (sock):
                 print "received good server_get"
                 handle_server_get(sock, message, message_inbox)
         if (message['type'] == 'routing_update'):
-            if(message['lifetime'] < lifetime_max):
+            if(message['life_time'] < lifetime_max):
                 print "received good routing update"
-                update_routine_table(message, routing_table)
+                update_routing_table(message, routing_table)
         if (message['type'] == 'ack'):
             if(message['life_time'] < lifetime_max):
                 print "Received ack..."
@@ -72,7 +72,7 @@ def receive_packet (sock):
                    deliver_messages(message['destination'], message_inbox)
         if (message['type'] == 'exit'):
             if(message['life_time'] < lifetime_max):
-                user_disconnect(sock, message, client_directory, routing_table):
+                user_disconnect(sock, message, client_directory, routing_table)
 
 def user_disconnect(sock, message, client_directory, routing_table):
     global SERVER_PORT
@@ -184,7 +184,7 @@ def handshake_response (message, client_directory, routing_table, message_inbox)
         sock.sendto(pickle.dumps(routing_message), (neighbor1, SERVER_PORT))
         #sock.sendto(pickle.dumps(routing_message), (neighbor2, SERVER_PORT))
         print "sending out server get to find messages for client: ", message['user_name']
-        server_get_send = {'type': 'server_get', 'server_source': socket.gethostbyname(socket.gethostname()), 'source': user_ip, 'user_name': user_name, 'life_time': 0}
+        server_get_send = {'type': 'server_get', 'server_source': socket.gethostbyname(socket.gethostname()), 'source': message['source'], 'user_name': message['user_name'], 'life_time': 0}
     sock.sendto(pickle.dumps(server_get_send), (neighbor1, SERVER_PORT))
     # sock.sendto(pickle.dumps(server_get_send), (neighbor2, SERVER_PORT))
         

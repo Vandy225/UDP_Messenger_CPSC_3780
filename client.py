@@ -5,7 +5,7 @@ import os
 import time
 
 
-SERVER_IP = '142.66.140.34'
+SERVER_IP = '142.66.140.48'
 UDP_PORT = 5006
 SERVER_PORT = 5005
 seq_num = 0
@@ -17,8 +17,8 @@ def handshake(sock):
     global seq_num
     user_name = raw_input("User Name: ")
 
-    if len(user_name) > 10:
-        print "User name > 10 characters, re-enter"
+    if len(user_name) < 10:
+        print "User name <= 10 characters, re-enter"
         user_name = raw_input("User Name: ")
 
     message = {'seq' : seq_num, 'type': 'handshake', 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name}
@@ -60,7 +60,7 @@ def send_mode(sock):
             exit_message = {'type': 'exit', 'seq': seq_num, 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'life_time': -1}
             print "sending notification of disconnect"
             sock.sendto(pickle.dumps(exit_message), (SERVER_IP, SERVER_PORT))
-            sock.shudown(sock.SHUT_RDWR)
+            sock.shutdown(socket.SHUT_RDWR)
             sys.exit()
         else:
             #user wants to send a message
@@ -99,7 +99,7 @@ def ack_handle(inv_inbox, sock):
     global SERVER_IP
     global user_name
     ack = {'type':'ack', 'source':socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'payload':inv_inbox, 'life_time':-1}
-sock.sendto(pickle.dumps(ack), (SERVER_IP,SERVER_PORT))
+    sock.sendto(pickle.dumps(ack), (SERVER_IP,SERVER_PORT))
             
 
 
