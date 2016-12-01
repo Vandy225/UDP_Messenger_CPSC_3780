@@ -15,7 +15,7 @@ neighbor2 = '142.66.140.40'
 # routing_table = {user_name: [server_host_ip, hops, user_name's ip address]}
 routing_table = {} #dictionary that tells a client which server to send messages to
 
-lifetime_max = 1 #for now...
+lifetime_max = 2 #for now...
 
 #lifetime_max = ceiling( number of servers/2)
 
@@ -68,6 +68,9 @@ def receive_packet (sock):
             if(message['destination'] in client_directory):
                    for msg in message['payload']:
                        message_inbox[msg['destination']].append(msg)
+            else:
+                if message['user_name'] in routing_table:
+                    sock.sendto(pickle.dumps(message), (get_user_host(message['user_name'], routing_table), SERVER_PORT))
                    #deliver_messages(message['destination'], message_inbox)
             #Need to add in the ability to forward these deliverys to their destination. 
         elif (message['type'] == 'exit'):
