@@ -5,7 +5,7 @@ import os
 import time
 
 
-SERVER_IP = '142.66.140.40'
+SERVER_IP = ''
 UDP_PORT = 5006
 SERVER_PORT = 5005
 seq_num = 0
@@ -123,6 +123,28 @@ def ack_handle(inv_inbox, sock):
 
 #main function
 if __name__ == '__main__':
+    #global SERVER_IP
+    #get the server ID from the
+    SERVER_ID = raw_input("Enter Server # you want to connect to: ")
+    #cast to an int
+    INT_SERVER_ID = int(SERVER_ID)
+    #trap to keep users from entering an invalid SERVER_ID
+    while INT_SERVER_ID < 1 or INT_SERVER_ID > 5:
+        SERVER_ID = raw_input("Invalid Server ID, retry: ")
+        INT_SERVER_ID = int(SERVER_ID)
+    #based on server ID, set the SERVER_IP to the appropriate value
+    if INT_SERVER_ID == 1:
+        SERVER_IP = "142.66.140.36"
+    elif INT_SERVER_ID == 2:
+        SERVER_IP = "142.66.140.37"
+    elif INT_SERVER_ID == 3:
+        SERVER_IP = "142.66.140.38"
+    elif INT_SERVER_ID == 4:
+        SERVER_IP = "142.66.140.39"
+    else:
+        SERVER_IP = "142.66.140.40"
+
+    #try and create sockets
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         #bind the socket for listening for the server
@@ -133,6 +155,7 @@ if __name__ == '__main__':
         sys.exit()
     #try and handshake with the server
     handshake(sock)
+    #sit in listen mode forever after that
     while True:
         send_mode(sock)
 
