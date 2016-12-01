@@ -5,7 +5,7 @@ import os
 import time
 
 
-SERVER_IP = '142.66.140.48'
+SERVER_IP = '142.66.140.40'
 UDP_PORT = 5006
 SERVER_PORT = 5005
 seq_num = 0
@@ -17,7 +17,7 @@ def handshake(sock):
     global seq_num
     user_name = raw_input("User Name: ")
 
-    if len(user_name) < 10:
+    while(len(user_name) < 10):
         print "User name <= 10 characters, re-enter"
         user_name = raw_input("User Name: ")
 
@@ -40,7 +40,7 @@ def handshake(sock):
         elif (user_ack['type'] == 'user_error'):
             print "username is taken, try again"
             handshake(sock)
-            user_listen(sock)#user needs to listen for initial messages
+    user_listen(sock)#user needs to listen for initial messages
             
 def send_mode(sock):
     global SERVER_IP
@@ -51,6 +51,9 @@ def send_mode(sock):
     while True:
         # get user input for recipient and payload
         recipient = raw_input("Address to: ")
+        '''while(len(recipient) < 10):
+            print "User name < 10 characters (invalid), re-enter"
+            recipient = raw_input("Address to: ")'''
         message = raw_input("Message: ")
         #if the user enters nothing, we assume a get
         if recipient == '' and message == '':
@@ -73,26 +76,41 @@ def send_mode(sock):
 def user_listen(sock):
     global SERVER_IP
     global SERVER_PORT
+    global user_name
     #contruct get type message
-    message = {'type': 'get', 'source': socket.gethostbyname(socket.gethostname())}
+    message = {'type': 'get', 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name}
     #send to server
-    sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
+    #sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
     print "sent get, waiting for server response..."
-    data, address = sock.recvfrom(10240)
-    received_packet = pickle.loads(data)
+    #time.sleep(1)
+    #Wait for a received message until we have something in the payloads list.
+    #Hats off to adam on this one!
+    tick = 0
+    while(tick < 5):
+        sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
+        data, address = sock.recvfrom(10240)
+        received_packet = pickle.loads(data)
+        if received_packet['payload']:
+            break
+        else:
+            tick += 1
+    print "Received packet:",str(received_packet)
     if type(received_packet) is dict:
         message_list = received_packet['payload'] #list of messages
-        inv_inbox = {} #this is for storing seq_nums to send acks back
-        for msg in message_list:
-            print "Message: ", msg['payload'], "From: ", msg['user_name']
-            if msg['user_name'] in inv_inbox:
-                inv_inbox[msg['user_name']].append(msg['seq'])
-            else:
-                inv_inbox[msg['user_name']] = [msg['seq']]
-        ack_handle(inv_inbox, sock)
+        if message_list:
+            inv_inbox = {} #this is for storing seq_nums to send acks back
+            for msg in message_list:
+                print "Message: ", msg['payload'], "From: ", msg['user_name']
+                if msg['user_name'] in inv_inbox:
+                    inv_inbox[msg['user_name']].append(msg['seq'])
+                else:
+                    inv_inbox[msg['user_name']] = [msg['seq']]
+            ack_handle(inv_inbox, sock)
+        else:
+            print "No messages right now..."
     #this condition is to say that an empty list was sent to the user, therefore no messages
     else:
-        print "No messages now buckaroo"
+        print "Got something strange... disregarding..."
 
 def ack_handle(inv_inbox, sock):
     global SERVER_PORT
