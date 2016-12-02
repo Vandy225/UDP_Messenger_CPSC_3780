@@ -69,7 +69,7 @@ def receive_packet (sock):
                    for msg in message['payload']:
                        message_inbox[msg['destination']].append(msg)
             else:
-                if message['user_name'] in routing_table:
+                if message['destination'] in routing_table:
                     sock.sendto(pickle.dumps(message), (get_user_host(message['user_name'], routing_table), SERVER_PORT))
                    #deliver_messages(message['destination'], message_inbox)
             #Need to add in the ability to forward these deliverys to their destination. 
