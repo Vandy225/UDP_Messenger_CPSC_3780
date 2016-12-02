@@ -84,7 +84,9 @@ def receive_packet (sock):
             print "Something went wrong... message's type was not found... Source:", message['server_source']
 ####################################################################################
 #Function: user_disconnect
-#Description: Handles the case when a user graefully disconnects from the network. The message is passed on to both neighbors so that we ensure that all servers will delete the user from routing tables and client direcotries. Don't delete users mailbox in case they log back on.
+#Description: Handles the case when a user graefully disconnects from the network. 
+#The message is passed on to both neighbors so that we ensure that all servers will delete the user 
+#from routing tables and client direcotries. Don't delete users mailbox in case they log back on.
 #Implementation: check if this server has the user in their routing table and client directory.
 #If the user is in either, then delete them. If they log back on handshake_response() will handle it.
 ####################################################################################
@@ -211,8 +213,10 @@ def deliver_messages(user_name, message_inbox):
 ####################################################################################
 #Function: handshake_response
 #Description: This function handles "handshake" packets which are received when users login for the first time or subsequent log ins.
-#Implementation: The user will send us a username that they wish to use, the server checks this username against its routing table. If its available we signal the client, if its not we tell the client to resend a new username.
-#We then add the client into our client directory and routing table ionce they have a good username. This triggers a round of routing updates so that all other servers will know about our new client.
+#Implementation: The user will send us a username that they wish to use, the server checks this username against its routing table. 
+#If its available we signal the client, if its not we tell the client to resend a new username.
+#We then add the client into our client directory and routing table ionce they have a good username. 
+#This triggers a round of routing updates so that all other servers will know about our new client.
 ####################################################################################
 def handshake_response (message, client_directory, routing_table, message_inbox):
     #first we will check if the user name is being hosted by another server
