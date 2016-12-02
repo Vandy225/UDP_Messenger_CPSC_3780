@@ -15,7 +15,7 @@ neighbor2 = '142.66.140.36'
 # routing_table = {user_name: [server_host_ip, hops, user_name's ip address]}
 routing_table = {} #dictionary that tells a client which server to send messages to
 
-lifetime_max = 1 #for now...
+lifetime_max = 2 #for now...
 
 #lifetime_max = ceiling( number of servers/2)
 
@@ -122,6 +122,7 @@ def handle_ack(message, message_inbox):
 def update_routing_table(message, routing_table):
     your_table = message['payload'] 
     for user in your_table:
+        print "examining ", user , " in routing table from: ", message['server_source']
         if user not in routing_table:
             print "learned about a new client: ", user
             #the entry in my routing table for the new user will be equal to the

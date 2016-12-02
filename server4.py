@@ -122,6 +122,7 @@ def handle_ack(message, message_inbox):
 def update_routing_table(message, routing_table):
     your_table = message['payload'] 
     for user in your_table:
+        print "examining ", user , " in routing table from: ", message['server_source']
         if user not in routing_table:
             print "learned about a new client: ", user
             #the entry in my routing table for the new user will be equal to the
