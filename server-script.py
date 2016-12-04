@@ -8,8 +8,9 @@ SERVER_PORT = 5005
 SERVER_ADDRESS = str(socket.gethostbyname(socket.gethostname()))
 message_inbox = {} # this will be the replacement for the queue
 client_directory = {} #this will be a dict of user_names : ip addresses that this server hosts
-neighbor1 = '142.66.140.40'
-neighbor2 = '142.66.140.37'
+neighbor1 = ''
+neighbor2 = ''
+
 # the format for pairs in the table is:
 # routing_table = {user_name: [server_host_ip, hops, user_name's ip address]}
 routing_table = {} #dictionary that tells a client which server to send messages to
@@ -18,7 +19,11 @@ lifetime_max = 2 #for now...
 
 #lifetime_max = ceiling( number of servers/2)
 
-#this is the new receive_message
+####################################################################################
+#Function: receive packet
+#Description: This function is constantly receiving packets, behaviour is decided based on each packets type, and in the case of propgated packets we check their lifetime before doing anything
+#Implementation: use the socket to listen for incommining packets. Use the if-else block to choose a behaviour. 
+####################################################################################
 def receive_packet (sock):
     global client_directory
     global routing_table
@@ -69,18 +74,22 @@ def receive_packet (sock):
                        message_inbox[msg['destination']].append(msg)
             else:
                 if message['destination'] in routing_table:
-                    sock.sendto(pickle.dumps(message), (get_user_host(message['user_name'], routing_table), SERVER_PORT))
-                       
-            #Need to add in the ability to forward these deliverys to their destination.
-            #else:
-#sock.sendto(pickle.dumps(message), (neighbor1, SERVER_PORT))
-            #sock.sendto(pickle.dumps(message), (neighbor2, SERVER_PORT))
+                    sock.sendto(pickle.dumps(message), (get_user_host(message['destination'], routing_table), SERVER_PORT))
+                   #deliver_messages(message['destination'], message_inbox)
+            #Need to add in the ability to forward these deliverys to their destination. 
         elif (message['type'] == 'exit'):
             if(message['life_time'] < lifetime_max):
                 user_disconnect(sock, message, client_directory, routing_table)
         else:
             print "Something went wrong... message's type was not found... Source:", message['server_source']
-
+####################################################################################
+#Function: user_disconnect
+#Description: Handles the case when a user graefully disconnects from the network. 
+#The message is passed on to both neighbors so that we ensure that all servers will delete the user 
+#from routing tables and client direcotries. Don't delete users mailbox in case they log back on.
+#Implementation: check if this server has the user in their routing table and client directory.
+#If the user is in either, then delete them. If they log back on handshake_response() will handle it.
+####################################################################################
 def user_disconnect(sock, message, client_directory, routing_table):
     global SERVER_PORT
     global neighbor1
@@ -97,11 +106,16 @@ def user_disconnect(sock, message, client_directory, routing_table):
     message['life_time']+=1
     sock.sendto(pickle.dumps(message), (neighbor1,SERVER_PORT))
     sock.sendto(pickle.dumps(message), (neighbor2,SERVER_PORT))
-    
-     
-     
 
-#Remove messages from the inbox. Based on the inverse inbox sent by the acker.
+####################################################################################
+#Function: handle_ack
+#Description: Remove messages from the inbox. Based on the inverse inbox sent by the acker.
+#Implementation: The acker is the person sending the acknowledgment, the payload that being sent,
+#is an "inverse_inbox" this inbox is organized like: { message's source (user name): [sequence numbers being acknowledged by the person sending this inbox.]}
+#So we check the inbox of the acker for these messages and delete them.
+#The acknowlegment is then sent to each neighbor so that if they happen to have a copy of the
+#messages being acknowledged then they too can be deleted.
+####################################################################################
 def handle_ack(message, message_inbox):
     print "Acknowledging..."
     acker = message['user_name']
@@ -111,18 +125,19 @@ def handle_ack(message, message_inbox):
             if msg['user_name'] in inv_inbox and msg['seq'] in inv_inbox[msg['user_name']]:
                 print "Removed message: ", str(msg['seq'])
                 message_inbox[acker].remove(msg)
-        '''temp_list = message_inbox[acker]
-        del message_inbox[acker]
-        temp_list[:] = [msg for msg in temp_list if not(msg['user_name'] in inv_inbox and msg['seq'] in inv_inbox[msg['user_name']])]
-        message_inbox[acker] = temp_list'''
     #avoid infinite sending....
     message['life_time']+=1
     sock.sendto(pickle.dumps(message), (neighbor1, SERVER_PORT))
     sock.sendto(pickle.dumps(message), (neighbor2, SERVER_PORT))
-    
-
+####################################################################################
+#Function: update_routing_table
+#Description: When a routing update is received, this will update our routing table. It also forwards our new table to both neighbors.
+#Implementation: W check out table against the table received, if a new client is found, we add it to our table. If a better path to a known client is found we add it to our table. 
+#if we update our table or not then we send each of our neighbors our new (or unchanged) table.
+####################################################################################
 def update_routing_table(message, routing_table):
-    your_table = message['payload'] 
+    your_table = message['payload']
+    #need to check every user in the received table.
     for user in your_table:
         print "examining ", user , " in routing table from: ", message['server_source']
         if user not in routing_table:
@@ -139,13 +154,19 @@ def update_routing_table(message, routing_table):
                 print "got better info about ", user, "from ", message['server_source']
                 routing_table[user] = [message['server_source'], your_table[user][1]+1, your_table[user][2]]
     routing_update = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': message['life_time']+1}
+    print "sending table to neighbors"
     sock.sendto(pickle.dumps(routing_update), (neighbor1, SERVER_PORT))
     sock.sendto(pickle.dumps(routing_update), (neighbor2, SERVER_PORT))
-
-#handle server get is going to need some serious rewriting as well  as the ack handler. 
+####################################################################################
+#Function:handle_server_get
+#Description: when a server_get is received then we will check to see if we have messages for the client who triggered the server get, if we dont, then we simply forward on the serverget.
+#If we do have messages then we need to deliver the messages (via info from the routing table)
+#and the forward the message on.
+#Implementation is just ;ike description says, except each time we forward the server_get on to neighbors. We change the server_source to be ourself (this server).
+####################################################################################
 def handle_server_get(sock, message, message_inbox):
     global routing_table
-    global neighor1
+    global neighbor1
     global neighbor2
     if message['user_name'] in message_inbox:
         server_deliver_message = {'type': 'server_deliver','destination': message['user_name'], 'payload': message_inbox[message['user_name']]}
@@ -162,8 +183,11 @@ def handle_server_get(sock, message, message_inbox):
         sock.sendto(pickle.dumps(message), (neighbor1, SERVER_PORT))
     else:
         print "SOMETHING WENT WRONG WITH HANDLE SERVER GET."
-    
-#this function is used to propagate a user's get request to servers
+####################################################################################
+#Function: send_server_get
+#Description: This function is used to propagate a user's get request to neighbor servers.
+#Implementation: Using the socket we construct and send a server_get message to each of our neighbors.
+####################################################################################
 def send_server_get(sock, user_name, user_ip):
     global neighbor1
     global neighbor2
@@ -172,7 +196,11 @@ def send_server_get(sock, user_name, user_ip):
     sock.sendto(pickle.dumps(server_get_send), (neighbor1, SERVER_PORT))
     sock.sendto(pickle.dumps(server_get_send), (neighbor2, SERVER_PORT))
     
-
+####################################################################################
+#Function: Deliver messages
+#Description:When a client sends a get request, we either deliver them their whole inbox, or we send them an empty list to indicate that they currently have no messages.
+#Implementation: As description says...
+#################################################################################### 
 def deliver_messages(user_name, message_inbox):
     global client_directory
     if user_name in client_directory and user_name in message_inbox:
@@ -182,7 +210,14 @@ def deliver_messages(user_name, message_inbox):
     else:
         # still want to send the client an empty list, will work out
         print "deliver messages went wrong...."
-
+####################################################################################
+#Function: handshake_response
+#Description: This function handles "handshake" packets which are received when users login for the first time or subsequent log ins.
+#Implementation: The user will send us a username that they wish to use, the server checks this username against its routing table. 
+#If its available we signal the client, if its not we tell the client to resend a new username.
+#We then add the client into our client directory and routing table ionce they have a good username. 
+#This triggers a round of routing updates so that all other servers will know about our new client.
+####################################################################################
 def handshake_response (message, client_directory, routing_table, message_inbox):
     #first we will check if the user name is being hosted by another server
     if message['user_name'] not in routing_table:
@@ -211,8 +246,11 @@ def handshake_response (message, client_directory, routing_table, message_inbox)
         
         
     
-
-#this function is responsible for dealing with a send type message
+####################################################################################
+#Function: send_handle
+#Description: this function is responsible for dealing with a send type message, either calling store or forwarding the message to where it needs to go.
+#Implementation: Straightforward...
+####################################################################################
 def send_handle(message, client_directory, routing_table, message_inbox):
     #check to see if the client's user_name is in the directory already
     if message['destination'] in client_directory:
@@ -230,8 +268,11 @@ def send_handle(message, client_directory, routing_table, message_inbox):
             #so just store the message for later
             store_message(message, message_inbox)
 
-
-#function used to store message for a user in the inbox
+####################################################################################
+#Function: store_message
+#Implementation: This will check if we have a mailbox for user, and stores the message.
+#Description: function used to store message for a user in the inbox
+####################################################################################
 def store_message(message, message_inbox):
     #if the user has a mailbox in the inbox
     if message['destination'] in message_inbox:
@@ -245,8 +286,12 @@ def store_message(message, message_inbox):
         new_list.append(message)
         #put the user's list of messages in the dictionary under their name
         message_inbox[message['destination']] = new_list
-
-#this function is designed to return the ip of a server hosting a user_name            
+####################################################################################
+#Function: get_user_host
+#Description: a helper function that returns the server_host of a particular client according to theis servers routing table. 
+#Implementation: Returns the string ip address of a server_host for a particular client.
+#ASSUMPTION: every server assumes that the server_host in our routing table owns the client.
+####################################################################################
 def get_user_host(user_name, routing_table):
     if user_name in routing_table:
         #this will return the ip of server that is hosting the user we are asking about
@@ -257,7 +302,36 @@ def get_user_host(user_name, routing_table):
         return '0'
 
 if __name__ == '__main__':
-
+    #Dont need to actually flag these because we are in the main function, but this is what is happening. 
+    #global neighbor1
+    #global neighbor2
+    SERVER_ID = raw_input("Initialize server #(1-5): ")
+    INT_SERVER_ID = int(SERVER_ID)
+    while INT_SERVER_ID < 1 or INT_SERVER_ID > 5:
+        SERVER_ID = raw_input("Invalid Server ID, retry: ")
+        INT_SERVER_ID = int(SERVER_ID)
+    
+    #assign neighbors based on the server selected.
+    #Left neighbor is neighbor 1
+    #right neighbor is neighbor 2
+    if INT_SERVER_ID == 1:
+        neighbor1 = '142.66.140.40'
+        neighbor2 = '142.66.140.37'
+    elif INT_SERVER_ID == 2:
+        neighbor1 = '142.66.140.36'
+        neighbor2 = '142.66.140.38'
+    elif INT_SERVER_ID == 3:
+        neighbor1 = '142.66.140.37'
+        neighbor2 = '142.66.140.39'
+    elif INT_SERVER_ID == 4:
+        neighbor1 = '142.66.140.38'
+        neighbor2 = '142.66.140.40'
+    elif INT_SERVER_ID == 5:
+        neighbor1 = '142.66.140.39'
+        neighbor2 = '142.66.140.36'
+    else:
+        print "Something went wrong when initializing neighbors. Crashing..."
+        sys.exit()
     #try and create socket
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -266,17 +340,9 @@ if __name__ == '__main__':
         print "Server started on port: ", str(SERVER_PORT)
     except socket.error:
         #if socket creation failed, notify and break
-        print "Failed to create socket"
+        print "Failed to create socket, there may already be a server running on this machine."
         sys.exit()
 
     while True:
         #start listening
         receive_packet(sock)
-
-
-                        
-                         
-
-                         
-                        
-

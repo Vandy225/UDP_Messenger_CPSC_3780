@@ -1,7 +1,0 @@
-while True:
-    thing = raw_input("echo: ")
-    print thing
-
-def fuckyoupython():
-    sjdfskld
-    

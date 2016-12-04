@@ -26,7 +26,7 @@ def handshake(sock):
     sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
     #increment sequence number, may use later
     seq_num += 1
-    print "waiting on server response..."
+    print "waiting on server response...\n"
     time.sleep(0.5)
     #now we need to check if our entry for username was good
     user_good = False
@@ -35,10 +35,10 @@ def handshake(sock):
         data, address = sock.recvfrom(10240)
         user_ack = pickle.loads(data)
         if user_ack['type'] == 'user_good':
-            print "name registration successful"
+            print "Username registration successful!\n"
             user_good = True
         elif (user_ack['type'] == 'user_error'):
-            print "username is taken, try again"
+            print "Username is taken, try again...\n"
             handshake(sock)
     user_listen(sock)#user needs to listen for initial messages
             
@@ -51,9 +51,6 @@ def send_mode(sock):
     while True:
         # get user input for recipient and payload
         recipient = raw_input("Address to: ")
-        '''while(len(recipient) < 10):
-            print "User name < 10 characters (invalid), re-enter"
-            recipient = raw_input("Address to: ")'''
         message = raw_input("Message: ")
         #if the user enters nothing, we assume a get
         if recipient == '' and message == '':
@@ -61,14 +58,15 @@ def send_mode(sock):
             user_listen(sock)
         elif recipient == 'disconnect' and message == 'disconnect':
             exit_message = {'type': 'exit', 'seq': seq_num, 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'life_time': -1}
-            print "sending notification of disconnect"
+            print "Sending notification of disconnect...\n"
             sock.sendto(pickle.dumps(exit_message), (SERVER_IP, SERVER_PORT))
             sock.shutdown(socket.SHUT_RDWR)
+            print "Exiting application..."
             sys.exit()
         else:
             #user wants to send a message
             new_message = {'seq': seq_num, 'type': 'send', 'payload': message, 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'destination': recipient}
-            print "constructed message to send, sending"
+            print "Sending message to server..."
             sock.sendto(pickle.dumps(new_message), (SERVER_IP, SERVER_PORT))
             #incrementing sequence number
             seq_num += 1
@@ -81,7 +79,7 @@ def user_listen(sock):
     message = {'type': 'get', 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name}
     #send to server
     #sock.sendto(pickle.dumps(message), (SERVER_IP, SERVER_PORT))
-    print "sent get, waiting for server response..."
+    print "Sending get requests, waiting for server response..."
     #time.sleep(1)
     #Wait for a received message until we have something in the payloads list.
     #Hats off to adam on this one!
@@ -94,7 +92,8 @@ def user_listen(sock):
             break
         else:
             tick += 1
-    print "Received packet:",str(received_packet)
+    #Used for debugging purposes to see the whole received packet.
+    #print "Received packet:",str(received_packet)
     if type(received_packet) is dict:
         message_list = received_packet['payload'] #list of messages
         if message_list:
@@ -148,10 +147,12 @@ if __name__ == '__main__':
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         #bind the socket for listening for the server
+        #May not actually need to bind... it seems to be working for Josh M and Dawson to not do so.
         sock.bind(('', UDP_PORT))
     except socket.error:
         #if socket creation failed, notify and break
         print "Failed to create socket"
+        print "There may be someone else already using this IP address:", str(socket.gethostbyname(socket.gethostname()))," please use a different machine."
         sys.exit()
     #try and handshake with the server
     handshake(sock)
