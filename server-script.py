@@ -1,23 +1,31 @@
+###################################################################
+#File: server-script.py
+#Authors: Lance C & Josh V
+#Description: This python script will interact wil the client.py scripts in order to send messages between users running the client.py script.
+#A form of distance vector routing is used to send messages between servers as well as pass along other useful information. 
+#Acknowledgements are sent by clients which are then propgated to other servers so that any copies of messages intended fo rthe client acknowedging can be deleted.
+#Last modified: Dec 4th, 2016
+###################################################################
 import socket
 import pickle
 import time
 import sys
 
-CLIENT_PORT = 5006
-SERVER_PORT = 5005
-SERVER_ADDRESS = str(socket.gethostbyname(socket.gethostname()))
-message_inbox = {} # this will be the replacement for the queue
+CLIENT_PORT = 5006 #Port that all clients are using.
+SERVER_PORT = 5005 #Port that all servers are using.
+SERVER_ADDRESS = str(socket.gethostbyname(socket.gethostname())) #This servers IP address. Not sure if we ever actually used this. Should have though. 
+message_inbox = {} # mailbox of messages for a particular client. Keyed by client. client : [ {message packet}, {message packet #2}, ... ]
 client_directory = {} #this will be a dict of user_names : ip addresses that this server hosts
-neighbor1 = ''
-neighbor2 = ''
+neighbor1 = '' #left neighbor
+neighbor2 = '' #right neighbor
 
 # the format for pairs in the table is:
 # routing_table = {user_name: [server_host_ip, hops, user_name's ip address]}
 routing_table = {} #dictionary that tells a client which server to send messages to
 
-lifetime_max = 2 #for now...
-
-#lifetime_max = ceiling( number of servers/2)
+lifetime_max = 2 #Lifetime maximum for a 5 server "pentagon" network means that from any soruce in order for a packet being sent to both the left and right neighbors will should only make two hops
+#Else the packet would make its third hop to a server that has already received a twin of the packet that made the 3rd hop.  
+#lifetime_max = number of servers/2
 
 ####################################################################################
 #Function: receive packet
@@ -128,6 +136,7 @@ def handle_ack(message, message_inbox):
     message['life_time']+=1
     sock.sendto(pickle.dumps(message), (neighbor1, SERVER_PORT))
     sock.sendto(pickle.dumps(message), (neighbor2, SERVER_PORT))
+
 ####################################################################################
 #Function: update_routing_table
 #Description: When a routing update is received, this will update our routing table. It also forwards our new table to both neighbors.
@@ -156,6 +165,7 @@ def update_routing_table(message, routing_table):
     print "sending table to neighbors"
     sock.sendto(pickle.dumps(routing_update), (neighbor1, SERVER_PORT))
     sock.sendto(pickle.dumps(routing_update), (neighbor2, SERVER_PORT))
+
 ####################################################################################
 #Function:handle_server_get
 #Description: when a server_get is received then we will check to see if we have messages for the client who triggered the server get, if we dont, then we simply forward on the serverget.
@@ -182,6 +192,7 @@ def handle_server_get(sock, message, message_inbox):
         sock.sendto(pickle.dumps(message), (neighbor1, SERVER_PORT))
     else:
         print "SOMETHING WENT WRONG WITH HANDLE SERVER GET."
+
 ####################################################################################
 #Function: send_server_get
 #Description: This function is used to propagate a user's get request to neighbor servers.
@@ -209,6 +220,7 @@ def deliver_messages(user_name, message_inbox):
     else:
         # still want to send the client an empty list, will work out
         print "deliver messages went wrong...."
+
 ####################################################################################
 #Function: handshake_response
 #Description: This function handles "handshake" packets which are received when users login for the first time or subsequent log ins.
@@ -237,12 +249,7 @@ def handshake_response (message, client_directory, routing_table, message_inbox)
         routing_message = {'type': 'routing_update', 'server_source': socket.gethostbyname(socket.gethostname()), 'payload': routing_table, 'life_time': 0}
         print "letting other servers know about new user via routing update"
         sock.sendto(pickle.dumps(routing_message), (neighbor1, SERVER_PORT))
-        sock.sendto(pickle.dumps(routing_message), (neighbor2, SERVER_PORT))
-        '''print "sending out server get to find messages for client: ", message['user_name']
-        server_get_send = {'type': 'server_get', 'server_source': socket.gethostbyname(socket.gethostname()), 'source': message['source'], 'user_name': message['user_name'], 'life_time': 0}
-        sock.sendto(pickle.dumps(server_get_send), (neighbor1, SERVER_PORT))
-        # sock.sendto(pickle.dumps(server_get_send), (neighbor2, SERVER_PORT))'''
-        
+        sock.sendto(pickle.dumps(routing_message), (neighbor2, SERVER_PORT)) 
         
     
 ####################################################################################
@@ -285,6 +292,7 @@ def store_message(message, message_inbox):
         new_list.append(message)
         #put the user's list of messages in the dictionary under their name
         message_inbox[message['destination']] = new_list
+
 ####################################################################################
 #Function: get_user_host
 #Description: a helper function that returns the server_host of a particular client according to theis servers routing table. 
@@ -301,9 +309,6 @@ def get_user_host(user_name, routing_table):
         return '0'
 
 if __name__ == '__main__':
-    #Dont need to actually flag these because we are in the main function, but this is what is happening. 
-    #global neighbor1
-    #global neighbor2
     SERVER_ID = raw_input("Initialize server #(1-5): ")
     INT_SERVER_ID = int(SERVER_ID)
     while INT_SERVER_ID < 1 or INT_SERVER_ID > 5:
