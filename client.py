@@ -12,9 +12,10 @@ seq_num = 0
 user_name = ''
 routing_table = {} #this is for the purpose of translating user_names into ip's
 
-def handshake(sock):
+def handshake():
     global user_name
     global seq_num
+    sock = create_socket()
     user_name = raw_input("User Name: ")
 
     while(len(user_name) < 10):
@@ -39,28 +40,32 @@ def handshake(sock):
             user_good = True
         elif (user_ack['type'] == 'user_error'):
             print "Username is taken, try again...\n"
-            handshake(sock)
-    user_listen(sock)#user needs to listen for initial messages
+            sock.close()
+            handshake()
+    sock.close()
+    user_listen()#user needs to listen for initial messages
+    
             
-def send_mode(sock):
+def send_mode():
     global SERVER_IP
     global SERVER_PORT
     global seq_num
     global user_name
-    
     while True:
         # get user input for recipient and payload
         recipient = raw_input("Address to: ")
         message = raw_input("Message: ")
         #if the user enters nothing, we assume a get
+        sock = create_socket()
         if recipient == '' and message == '':
             #listen for messages
-            user_listen(sock)
+            sock.close()
+            user_listen()
         elif recipient == 'disconnect' and message == 'disconnect':
             exit_message = {'type': 'exit', 'seq': seq_num, 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'life_time': -1}
             print "Sending notification of disconnect...\n"
             sock.sendto(pickle.dumps(exit_message), (SERVER_IP, SERVER_PORT))
-            sock.shutdown(socket.SHUT_RDWR)
+            sock.close()
             print "Exiting application..."
             sys.exit()
         else:
@@ -70,11 +75,13 @@ def send_mode(sock):
             sock.sendto(pickle.dumps(new_message), (SERVER_IP, SERVER_PORT))
             #incrementing sequence number
             seq_num += 1
+            sock.close()
 
-def user_listen(sock):
+def user_listen():
     global SERVER_IP
     global SERVER_PORT
     global user_name
+    sock = create_socket()
     #contruct get type message
     message = {'type': 'get', 'source': socket.gethostbyname(socket.gethostname()), 'user_name': user_name}
     #send to server
@@ -110,6 +117,7 @@ def user_listen(sock):
     #this condition is to say that an empty list was sent to the user, therefore no messages
     else:
         print "Got something strange... disregarding..."
+    sock.close()
 
 def ack_handle(inv_inbox, sock):
     global SERVER_PORT
@@ -118,7 +126,24 @@ def ack_handle(inv_inbox, sock):
     ack = {'type':'ack', 'source':socket.gethostbyname(socket.gethostname()), 'user_name': user_name, 'payload':inv_inbox, 'life_time':-1}
     sock.sendto(pickle.dumps(ack), (SERVER_IP,SERVER_PORT))
             
-
+#the purpose of this function is to create a socket object for one time use
+def create_socket():
+    global SERVER_IP
+    while True:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            #bind the socket for listening for the server
+            #May not actually need to bind... it seems to be working for Josh M and Dawson to not do so.
+            sock.bind(('', UDP_PORT))
+            break
+        except socket.error:
+            #if socket creation failed, notify and break
+            print "Waiting for socket to become avaliable..."
+            #print "Failed to create socket"
+            #print "There may be someone else already using this IP address:", str(socket.gethostbyname(socket.gethostname()))," please use a different machine."
+            # sys.exit()
+    return sock
+            
 
 #main function
 if __name__ == '__main__':
@@ -143,7 +168,7 @@ if __name__ == '__main__':
     else:
         SERVER_IP = "142.66.140.40"
 
-    #try and create sockets
+    '''#try and create sockets
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         #bind the socket for listening for the server
@@ -153,12 +178,12 @@ if __name__ == '__main__':
         #if socket creation failed, notify and break
         print "Failed to create socket"
         print "There may be someone else already using this IP address:", str(socket.gethostbyname(socket.gethostname()))," please use a different machine."
-        sys.exit()
+        sys.exit()'''
     #try and handshake with the server
-    handshake(sock)
+    handshake()
     #sit in listen mode forever after that
     while True:
-        send_mode(sock)
+        send_mode()
 
         
     

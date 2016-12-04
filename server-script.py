@@ -75,8 +75,7 @@ def receive_packet (sock):
             else:
                 if message['destination'] in routing_table:
                     sock.sendto(pickle.dumps(message), (get_user_host(message['destination'], routing_table), SERVER_PORT))
-                   #deliver_messages(message['destination'], message_inbox)
-            #Need to add in the ability to forward these deliverys to their destination. 
+                   
         elif (message['type'] == 'exit'):
             if(message['life_time'] < lifetime_max):
                 user_disconnect(sock, message, client_directory, routing_table)
